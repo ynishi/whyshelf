@@ -1603,6 +1603,9 @@ fn the_book_of_a_document_a_side_shows_is_the_one_book_of_every_file_that_may_ho
     let s = shelf(vec![sided(X, &[A, B]), sided("specs/x.md", &[A, C])]);
     assert_eq!(s.book_of(docid(A)), None);
     assert_eq!(s.book_of(docid(C)), Some(&spec));
+    // No file carries A, so neither file is told it may carry it twice.
+    assert!(maybe_twice(&s, X).is_empty());
+    assert!(maybe_twice(&s, "specs/x.md").is_empty());
     // U under the same book, and under another.
     let s = shelf(vec![sided(X, &[A, B]), unreadable_at(U)]);
     assert_eq!(s.book_of(docid(A)), Some(&finding()));

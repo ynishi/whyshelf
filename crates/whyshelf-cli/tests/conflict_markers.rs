@@ -239,6 +239,82 @@ fn status_of_a_book_lists_the_documents_of_both_sides_with_their_records() {
     assert_eq!(ids, [A, B]);
 }
 
+/// The book of notes admits `ana` only; the whole shelf (`[decide]`), `bo` only.
+const RULED: &str = r#"[[group]]
+name = "maintainers"
+members = ["ana"]
+
+[[group]]
+name = "others"
+members = ["bo"]
+
+[decide]
+default = ["others"]
+
+[[book]]
+name = "note"
+dir = "notes"
+key = { prefix = "N" }
+[[book.field]]
+name = "title"
+type = "text"
+required = true
+[book.decide]
+approve = ["maintainers"]
+"#;
+
+/// The records of `check` that are not admitted, as the text of its problems.
+fn not_admitted(project: &Project) -> String {
+    json(&project.run(&["check"]))["health"]["ledger_problems"].to_string()
+}
+
+/// A record about a document of a side that names no book is read with the rule of
+/// the book of the file, not with the rule of the whole shelf: an approval by `ana`
+/// is admitted and one by `bo` is not. Beside a file whose identity cannot be read
+/// instead, it is read with the rule of the whole shelf.
+#[test]
+fn a_record_of_a_side_that_names_no_book_is_read_with_the_rule_of_the_book_of_the_file() {
+    let project = Project::with("conflict-record-book", RULED, &note(A, "N-1", "Ours"));
+    let approved = project.run(&["judge", "approve", "N-1", "--actor", "ana"]);
+    let answer = json(&approved);
+    assert_eq!(approved.status.code(), Some(0), "{answer}");
+    assert_eq!(answer["judged"][0]["record"]["book"], "note");
+    // ana's record, made to name no book, and the same by bo under another identity.
+    let id = answer["judged"][0]["record"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let ledger = project.0.join(".whyshelf/ledger");
+    let file = ledger.join(format!("{id}.json"));
+    let mut record: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+    record.as_object_mut().unwrap().remove("book");
+    fs::write(&file, serde_json::to_string_pretty(&record).unwrap() + "\n").unwrap();
+    const BY_BO: &str = "01a1c4f0-0000-7000-8000-0000000000fe";
+    record["actor"] = "bo".into();
+    record["id"] = BY_BO.into();
+    fs::write(
+        ledger.join(format!("{BY_BO}.json")),
+        serde_json::to_string_pretty(&record).unwrap() + "\n",
+    )
+    .unwrap();
+    // The file of A is left holding both sides of A and B.
+    put(&project, "notes/N-1.md", &both_sides(A, B));
+    let problems = not_admitted(&project);
+    assert!(
+        problems.contains(BY_BO) && problems.contains("`bo` may not approve"),
+        "{problems}"
+    );
+    assert!(!problems.contains(&id), "{problems}");
+    // A file whose identity cannot be read in its place: the whole shelf's rule.
+    put(&project, "notes/N-1.md", "---\n- a list\n---\nThe body.\n");
+    let problems = not_admitted(&project);
+    assert!(
+        problems.contains(&id) && problems.contains("`ana` may not approve"),
+        "{problems}"
+    );
+    assert!(!problems.contains(BY_BO), "{problems}");
+}
+
 /// `impact --within` does not pass while a file of the end after is left in a merge
 /// conflict, which it names apart from the files whose identity cannot be read; a
 /// document gone before that a side shows after cannot be told, with the file.

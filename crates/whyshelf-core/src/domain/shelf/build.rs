@@ -750,6 +750,12 @@ impl InvalidDoc {
         self.seen.shows(id)
     }
 
+    /// The identities the sides of a merge conflict in the file show, in order; none
+    /// for any other file. The one reading of them for the counts of the shelf.
+    pub(crate) fn shown(&self) -> impl Iterator<Item = DocId> + '_ {
+        self.sides().into_iter().flat_map(Sides::ids).copied()
+    }
+
     /// Everything that is wrong with it.
     pub fn problems(&self) -> &NonEmptyVec<DocProblem> {
         &self.problems
@@ -2518,10 +2524,8 @@ impl Shelf {
             .chain(self.invalid.keys())
             .map(|id| (*id, Known::Carried))
             .collect();
-        for file in &self.sided {
-            for id in file.sides().into_iter().flat_map(Sides::ids) {
-                known.entry(*id).or_insert(Known::Shown);
-            }
+        for id in self.sided.iter().flat_map(InvalidDoc::shown) {
+            known.entry(id).or_insert(Known::Shown);
         }
         known
     }

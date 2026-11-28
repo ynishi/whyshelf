@@ -342,10 +342,7 @@ pub fn plan<'a>(
     let sided = shelf
         .sided()
         .iter()
-        .filter(|file| {
-            file.sides()
-                .is_some_and(|sides| sides.ids().iter().any(involved))
-        })
+        .filter(|file| file.shown().any(|id| involved(&id)))
         .count();
     let unreadable = shelf.unreadable().len();
     let untold = (invalid > 0 || sided > 0 || unreadable > 0).then_some(Unjoined {

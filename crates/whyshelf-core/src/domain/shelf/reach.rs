@@ -119,10 +119,7 @@ pub(crate) fn walk(named: &NonEmptySet<DocId>, shelf: &Shelf) -> Walked {
     let sided = shelf
         .sided()
         .iter()
-        .filter(|file| {
-            file.sides()
-                .is_some_and(|sides| sides.ids().iter().any(|id| !reached.contains(id)))
-        })
+        .filter(|file| file.shown().any(|id| !reached.contains(&id)))
         .count();
     let unreadable = shelf.unreadable().len();
     let untold = (invalid > 0 || sided > 0 || unreadable > 0).then_some(Unwalked {

@@ -1,0 +1,98 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:b00898d9851ccfd3176429324300e0c4e2becec446bf7e1f35812e685e0f9066",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::a_document_no_side_shows_whose_file_is_gone_is_gone_while_a_conflict_is_there",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:a3395e97a5c4cb75ced5f110798b4fec7bbb03ea0617766f0f22f3b0e72c5a22",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::a_document_of_a_side_with_no_record_is_found_by_its_id_and_told_unknown_in_the_file",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:304a473ba4c4c3d838eb76037cf9203e4f9e4964e601c9e5910e3b13491cb7ad",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::a_record_of_a_side_that_names_no_book_is_read_with_the_rule_of_the_book_of_the_file",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:102458be44e45e26cf6635a93b791bd99361bb307fee23698cc5aa4a6ddf021d",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::another_file_of_the_identity_of_a_side_and_the_file_of_the_conflict_are_both_invalid",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:ba996f7de52f1deff03e964fd7b7aa603b1453fd3f5a32bd110a49c8c1163dd1",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::check_tells_the_identities_the_sides_of_the_file_show",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:99865038f79c975805b989901852d5442c9ba267df6bc88c406a840d0a6cb729",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::impact_within_does_not_pass_while_a_file_is_left_in_a_conflict",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:9186616697ee1d4a5fbeaeb5601af29508d3dff821887951e1c05e9e08d23f87",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::status_of_a_book_lists_the_documents_of_both_sides_with_their_records",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:eede7939eb51256c0036ddba1e16085c3e69f4e5dc45a82f7c0d0ee23735c32e",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/reach.rs::a_file_left_in_a_merge_conflict_whose_sides_are_not_reached_is_counted_and_said",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:09599642bf895875712f830992c98117b47be9e39d15d27cbebb804c3ab29195",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/units.rs::a_file_left_in_a_merge_conflict_whose_side_is_divided_is_counted_and_said",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795854340263,
+  "expires": null,
+  "frame": [
+    {
+      "address": "3175d920edc27f300f70db581a479b0d80a3924f",
+      "hash": "sha256:baa66d9c33d1c41d44ccc9e4f6a27f378cd443ccd5040e05987989218d6a08b3",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "115"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a22124-cc85-770f-a545-bfdbd5f53974"
+    }
+  ],
+  "id": "01a22142-aad0-723b-94ee-c6e3d0312841",
+  "kind": "decision",
+  "reason": "After the independent code review of #217, V-143 names the test of a retirement of a document a side shows, V-144 the end-to-end test of a record that names no book read with the rule of the book of the file, the test of the book of a document two conflicted files show asserts that neither is told it may carry an identity twice, and the shared conflict test file gained a declaration of rules; what these documents claim and the tests they name still hold, checked by those tests and the full test suite",
+  "revision": "214ce7f032bd690664ce820cbde1ce9c369a3962",
+  "seen": "sha256:a1bd46b32c84416c8d5d8cf5c627a087b80cc059b981b9b1748945b6e55acc31",
+  "seen_address": "687a32f435ba702df457e425404061fc49e096a0",
+  "subject": "01a22125-2876-752b-8a78-b21833a93ac5",
+  "v": 1,
+  "verb": "approve"
+}

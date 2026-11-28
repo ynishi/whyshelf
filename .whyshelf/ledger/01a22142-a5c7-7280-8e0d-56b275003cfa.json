@@ -1,0 +1,56 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:66b8e884837dc7c926555a37871a66713c5df3e2730d857c4771cb609460cd7e",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::check_names_the_file_as_one_that_holds_conflict_markers_and_gives_it_no_identity",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:924a98912f9b5d5fbcc0eb50c6b4a58ae36d0625ea71b3b9703f3886ecf22f0a",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::the_documents_of_both_sides_of_a_file_are_neither_gone_nor_invalid_but_unknown",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5fc6327feb8aeeee6648aa6a7279a3740d255f01ef0bed14033a68dc97e9c910",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/conflict_markers.rs::two_sides_of_one_identity_are_that_documents_file_and_invalid_for_its_conflict",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795854340263,
+  "expires": null,
+  "frame": [
+    {
+      "address": "4e54584512442fadcdc7b0776a7f3e9f3f6d2067",
+      "hash": "sha256:8bb85a9e3ff2718d90a5a5f27e205b1f5ad50af02b0319e88ff4fe9c62928ce1",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "113"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a21d1c-14f4-76a5-8d36-a9a72bc6c6a8"
+    }
+  ],
+  "id": "01a22142-a5c7-7280-8e0d-56b275003cfa",
+  "kind": "decision",
+  "reason": "After the independent code review of #217, V-143 names the test of a retirement of a document a side shows, V-144 the end-to-end test of a record that names no book read with the rule of the book of the file, the test of the book of a document two conflicted files show asserts that neither is told it may carry an identity twice, and the shared conflict test file gained a declaration of rules; what these documents claim and the tests they name still hold, checked by those tests and the full test suite",
+  "revision": "214ce7f032bd690664ce820cbde1ce9c369a3962",
+  "seen": "sha256:fca4e7fc668f0edb2802e35fdf62b6e9aae8965eb6ddb45a58b2f7e720d4097a",
+  "seen_address": "98165322d41a06ea70957c345b3373e3c0512d83",
+  "subject": "01a21d1c-3dcc-7424-8d7c-f4754d3d404c",
+  "v": 1,
+  "verb": "approve"
+}

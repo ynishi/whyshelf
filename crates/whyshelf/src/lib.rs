@@ -384,7 +384,8 @@
 //! `gone` nor `invalid`; `check` and `health` give the file no `id` and list the
 //! identities in `sides`. Every other document is told as it would be without the
 //! file: one no file carries is `gone`. Such a document is found by its identifier
-//! (`get` answers it `unknown`), even with no record; a record of it that names no
+//! (`get` answers it `unknown`, an approval refuses it, and `judge retire` retires it
+//! as any document that cannot be told), even with no record; a record of it that names no
 //! book is read with the book of the file (when every file that may hold it is under
 //! that book); `status --book` lists it under the book of the file when it has a
 //! record (one with none is not a row of `status`, the file is); and another file

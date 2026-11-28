@@ -258,6 +258,80 @@ fn get_of_a_document_a_side_of_a_conflict_shows_tells_it_unknown_and_an_approval
     assert!(matches!(err, ShelfError::NotFound { .. }), "{err:?}");
 }
 
+/// A retirement asks nothing of the state of its document, so one a side of a conflict
+/// shows, with no record, is retired: the record keeps that it cannot be told, names
+/// the book of the file, and the document is then one the ledger knows.
+#[test]
+fn a_document_a_side_of_a_conflict_shows_is_retired_with_the_book_of_the_file_and_then_has_a_record()
+ {
+    use super::load::load;
+    use crate::domain::shelf::build::{DocReading, FailureTag, RawProblem, ReadId};
+    use crate::domain::shelf::ledger::{DecisionVerb, Seen};
+    use crate::domain::shelf::lookup::{Absence, Resolution, resolve};
+    use crate::domain::shelf::schema::{
+        BookRuleDecl, DecideDecl, GroupDecl, MemberDecl, RuleDecl, ShelfDecl,
+    };
+    let fake = FakeShelf::new().with_files(vec![DocReading::Unparsed {
+        origin: "findings/x.md".parse().unwrap(),
+        id: ReadId::of_sides([docid(1), docid(2)]),
+        why: RawProblem::ConflictMarkers,
+    }]);
+    // A rule is declared, so a record names its book.
+    let alice = || RuleDecl {
+        default: Some(vec!["us".to_owned()]),
+        ..RuleDecl::default()
+    };
+    let books = fake.decls.lock().unwrap().clone();
+    *fake.written.lock().unwrap() = Some(ShelfDecl {
+        decide: DecideDecl {
+            groups: vec![GroupDecl {
+                name: "us".to_owned(),
+                members: vec![MemberDecl {
+                    name: "alice".to_owned(),
+                    from: None,
+                    until: None,
+                }],
+            }],
+            shelf: Some(alice()),
+            books: vec![BookRuleDecl {
+                book: "finding".to_owned(),
+                rule: alice(),
+            }],
+        },
+        ..ShelfDecl::of_books(books)
+    });
+    let mut app = ShelfApp::new(fake);
+    block_on(app.judge(JudgeRequest {
+        judgement: Judgement::Retire { reason: None },
+        reference: r(&docid(1).to_string()),
+        by: Default::default(),
+    }))
+    .unwrap();
+    let records = app.ports().records();
+    let [Record::Decision(decision)] = records.as_slice() else {
+        panic!("one decision: {records:?}");
+    };
+    assert_eq!(decision.subject(), docid(1));
+    assert_eq!(
+        decision.verb(),
+        &DecisionVerb::Retire {
+            seen: Seen::Not(FailureTag::Unknown)
+        }
+    );
+    assert_eq!(decision.book().map(|b| b.as_str()), Some("finding"));
+    // Then the ledger knows it: named by the ledger, and still unknown in the file.
+    let loaded = block_on(load(app.ports())).unwrap();
+    let Resolution::LedgerOnly {
+        id,
+        state: Absence::Unknown(may),
+    } = resolve(&loaded.shelf, &loaded.ledger, &r(&docid(1).to_string()))
+    else {
+        panic!("ledger only, unknown");
+    };
+    assert_eq!(id, docid(1));
+    assert_eq!(may.shown(), ["findings/x.md".parse().unwrap()]);
+}
+
 #[test]
 fn get_of_a_book_nobody_declared_is_an_unknown_book() {
     let app = app(vec![fr(1, "slow", &[])]);
