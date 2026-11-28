@@ -40,7 +40,8 @@
 //! # The contract, in these adapters
 //!
 //! Every adapter here keeps the promises of [`SpaceAdapter`] (identifying,
-//! reproducible, content only), and these rules, whatever its names are:
+//! reproducible, content only, of its sources), and these rules, whatever its names
+//! are:
 //!
 //! - A text is no name by the grammar of the space alone, with no I/O.
 //! - What the adapter is not sure of cannot be told: absent and there are said only
@@ -70,7 +71,7 @@
 //!
 //! The domain fixes the shape of the answers ([`ArtifactReading`]) and how a content
 //! is hashed; what a name is stays the adapter's. Each adapter writes, on its module
-//! page, its space's definition under these seven headings:
+//! page, its space's definition under these eight headings:
 //!
 //! | heading | what it says |
 //! |---|---|
@@ -81,13 +82,15 @@
 //! | `The answers` | when a name is there, absent, cannot be told, or no name |
 //! | `What is compared` | what of the thing is the content, and the bounds of reading it |
 //! | `Where it reads` | the root, and the build directory it declares |
+//! | `What it stands on` | every source its answers stand on (files of the side), and what it reads derived from them: how that is held against them, and what of it cannot be |
 //!
 //! A test of this module's (`conformance`, private), through a hook each adapter
 //! gives for its tests, holds every adapter, asked through the dispatch as a project
 //! asks it, to the promises
 //! of identifying and of reproducibility over one machine, to the answers above, to
-//! each bound of bytes and of depth its hook declares, to reading back, and to the
-//! seven headings; its page lists what it checks, and what it does not (the blocking
+//! each bound of bytes and of depth its hook declares, to reading back, to the promise
+//! of its sources as the hook declares what it stands on, and to the eight headings;
+//! its page lists what it checks, and what it does not (the blocking
 //! threads, reading and writing nothing else, the bound of time, and the time and the
 //! locale).
 //!

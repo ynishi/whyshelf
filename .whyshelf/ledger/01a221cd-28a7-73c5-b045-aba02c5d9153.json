@@ -1,0 +1,63 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "7507c437a7fc0208c9eea4203b59f9eb54aff492",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9b3c8f48c52d841322bee94b73bb71cfdca57c7f8d4583dae91ef5ab4409c32c",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "cb4d11c9070721229624c5ecd61926f15c89bde9",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0b6c52851039af44fcd37b675df94a2a389cb83cc32b1e949607a63494c0c033",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/promise.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795863407184,
+  "expires": null,
+  "frame": [
+    {
+      "address": "6fe10e2167766012ce32da4666a6f4c8125f788a",
+      "hash": "sha256:bb4c185cc7a9f4359f2fbf4aef4552b18dd870935791be542f85f25ba525b3e9",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "83"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1f2a3-70f9-7184-8e59-6b255b74caf0"
+    }
+  ],
+  "id": "01a221cd-28a7-73c5-b045-aba02c5d9153",
+  "kind": "decision",
+  "reason": "For #225, after its author's review of the whole diff: DEC-84 says the fourth promise, of its sources, and the eight headings; DEC-54 and DEC-96 say the docs are held against the sources and a dependency's docs are not walked; REQ-13 grounds F-94; the tests and helpers these documents name gained the holding of the docs (the fixtures write the sources the docs are of, the conformance hook declares what each adapter stands on, a reason not of the sources is a new kind of unknown), and what each claims still holds, checked by its tests and the full test suite",
+  "revision": "f00aa52e2adfe992659965c175db80cda9371c4d",
+  "seen": "sha256:0c5527d1b1b0962d1fabeb61dbfb4e9e10a80f61bd35321bc1d7716c5d21839c",
+  "seen_address": "e597778bce321f51c49d0c0a94d42fdcc4765e40",
+  "subject": "01a1f2a3-70f9-7184-8e59-6b2611579257",
+  "v": 1,
+  "verb": "approve"
+}

@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:cd2fb8ae1f18ffc8f51bde35440081a3b35fbcc544dffdf0c2c4e74f95c1d3c7",
+      "link": "cases",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/sited.rs::tests::a_page_is_under_a_place_in_the_form_given_or_the_form_resolved_and_never_under_a_relative_one",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:78042c99e6bdaa1e0e312223575eb00a315e2691bb870301a41f5ee93d6b50db",
+      "link": "cases",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/sited.rs::tests::the_directory_above_a_path_is_none_at_the_top",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "7e3059a7e02a1a6b1160a2d5e6de69b16dd8791c",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:7585562025dd378ce89ae2ab49e9c8fa30bd925a1ca3f5edfff91f557c7159d3",
+      "link": "tests",
+      "name": "crates/whyshelf-core/src/domain/shelf/artifact.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "6146220b3f27cb8b06cd840c0be3f7f947d4a57e",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:9b3c8f48c52d841322bee94b73bb71cfdca57c7f8d4583dae91ef5ab4409c32c",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "c5dffb64311bbcd9a1cdc30dbb24433ab2893d6a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:eaed4287c8cdda9e9b442bf4f6c2bde096f2184634a1f29256f449e36701bc57",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/held_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "8cf79ba3463aac445d3a983f0e53f1d86bbf76a0",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:b3b9d83cdf41231526368f8965714db8797bc7d6253a105e0ed7beb79fb70c2d",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/moves.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "60c2f234f762eecd397dcfc4841b5568f9d1fcb8",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:0d6aa71a850ea7f60d9688e96421ccbf19643615745d0afbe9be3801a42af9a4",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/state/git_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795869844327,
+  "expires": null,
+  "frame": [
+    {
+      "address": "101e9ebb00e7e402d4257c741ca3c3a99c956777",
+      "hash": "sha256:50430d082f32f189274bd2a7408c7f767727ea2a84611c5cf514015c19686977",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "116"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a221c7-6b1b-7014-bd12-a2bc64a49b96"
+    }
+  ],
+  "id": "01a2222f-3b17-7457-8632-29a13c7839e4",
+  "kind": "decision",
+  "reason": "V-145 names whole, under tests, the files whose tests cannot all be listed (DEC-112), in place of single tests of them; what it verifies is the same",
+  "revision": "25f2f6b0829fa695a683d41c27ce5c04b3224cda",
+  "seen": "sha256:aff7d3789dbcc32cb066fed1e99bd78c7c97442ed147eea20fc5e672a2e2ad78",
+  "seen_address": "5222aa7be4e4f8ad09b5bcaa15ae1595e287b373",
+  "subject": "01a221c7-6b1b-7014-bd12-a2bd27808c6c",
+  "v": 1,
+  "verb": "approve"
+}

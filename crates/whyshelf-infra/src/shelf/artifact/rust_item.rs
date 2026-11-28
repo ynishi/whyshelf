@@ -15,8 +15,12 @@
 //!   the build directory: CARGO_TARGET_DIR | build.target-dir of the root's cargo
 //!   config | the conventional one beside the root's Cargo.toml
 //!     ├─ none of them ──► cannot tell, each name
-//!     └─ its doc directory, then the directory of the crate in it
+//!     └─ its doc directory, held against the sources of the side, once a side
+//!        ├─ a page of the source is not as its file ──► cannot tell (not of its
+//!        │                                              sources), each name
+//!        └─ the directory of the crate in it
 //!          ├─ no index.html, or one rustdoc did not write ──► cannot tell
+//!          ├─ a crate that is none of the project's ──► cannot tell (not of its sources)
 //!          └─ the path, segment by segment, in the HTML ──► absent | cannot tell (why)
 //!               │ there                                      (a place: page, kind, member)
 //!               └─ the promise of the place, read from its page
@@ -83,15 +87,15 @@
 //!    `index.html`, an item is a page `<kind>.<Name>.html` of a kind in
 //!    [`ITEM_KINDS`], each by the rules a name is looked up by (the same files, the
 //!    same order, the same places). No re-export, no page that only redirects and no
-//!    path that leaves the root of the project and the build directory is a name; the
-//!    crates of the gone names are walked first. Every name is one `resolve` tells is
-//!    there.
+//!    path that leaves the root of the project and the build directory is a name, and
+//!    no name of a crate that is none of the project's; the crates of the gone names
+//!    are walked first. Every name is one `resolve` tells is there.
 //! 2. The candidates of a gone name are the names that end as it does: the most
 //!    segments, counted from the last, that any name of a crate has in common with it,
 //!    and those names alone, in each crate (`app::old::m::Foo` has `app::new::m::Foo`
 //!    and `app::new::sub::m::Foo`, and not `app::other::Foo`, when it has the first).
 //!    The count is of a crate, the first segment of a name, so that a name that ends
-//!    alike in more segments in a dependency (`http::Error` for `myapp::http::Error`)
+//!    alike in more segments in another crate (`http::Error` for `myapp::http::Error`)
 //!    does not hide one of the crate of the gone name that ends alike in fewer
 //!    (`myapp::net::Error`). A name is never a candidate of itself or of another gone
 //!    name.
@@ -157,13 +161,11 @@
 //! KNOWN LIMITATION: a name that was renamed where it stands (`m::Foo` to `m::Bar`) has
 //! no candidate, since no segment at the end is alike; a name that is only reachable
 //! by a public re-export (it has no page of its own, nor a module that holds it) is no
-//! candidate, though a lookup of it says it is there; and the docs are read as they are
-//! (below, "Where the docs are"), so an item of docs left by an earlier build is a
-//! candidate too. The crates of the gone names are walked first and the others in
-//! the order of their names, so docs built with their dependencies can reach the bound
-//! of names before another crate of the project is walked: a candidate in a crate not
-//! walked is not found, and the note `scan_truncated` says the search stopped. A gone
-//! name counts toward a move of a prefix only through the candidates kept (at most 16):
+//! candidate, though a lookup of it says it is there. Docs that are not of the sources
+//! are not searched (below, "What it stands on"), and the note `search_unavailable`
+//! says why; the docs of a dependency are not walked, so none of its names is a
+//! candidate. A gone name counts toward a move of a prefix only through the candidates
+//! kept (at most 16):
 //! one whose candidate was cut does not, and a move that fewer of them carry for that
 //! is not tried. This is
 //! a search for where a gone name moved and no list of the names there are: the space
@@ -200,10 +202,56 @@
 //! project are read from the commit, where nothing was built, and docs outside are
 //! told at neither side.
 //!
-//! The docs are read as they are: docs left there by an earlier build, of an item
-//! or a crate the project no longer has, read as there. Build them afresh before a
-//! check that must see the tree as it is (this repository's `just rust-doc` removes
-//! them first).
+//! The docs are held against the sources of the side before any page of them is read
+//! (below, "What it stands on"): docs that are not of the sources as they are answer
+//! no name, there or absent. Building them again is the project's: this adapter runs
+//! no program and writes nothing, and says what to do instead.
+//!
+//! # What it stands on
+//!
+//! | sources (files of the side) | derived from them |
+//! |---|---|
+//! | the `.rs` files of the crates of the project, its manifests (`Cargo.toml`), and its cargo settings (`.cargo/config` and `.cargo/config.toml`) | the HTML `cargo doc` wrote |
+//!
+//! `CARGO_TARGET_DIR` says only where the derived docs are; it decides no answer.
+//!
+//! The docs are held against the sources by content, the whole build at once, once
+//! for each side a run reads: rustdoc writes, for each file of a crate it documents, a
+//! page of the source (`src/<crate>/<path>.html`) whose code block is the text of the
+//! file as the compiler read it (a byte order mark at its start dropped, each CRLF as
+//! LF, the last line break as it is). For each crate of the project in the docs (a
+//! directory of a crate with its index, or a directory of its pages of the source),
+//! every such page is laid beside the file of the side it is of (the rules are on the
+//! page of the module that reads the manifests, `crates`, private: a page of a source
+//! a build made, under the build directory by its whole path, is not compared) and
+//! compared byte for byte. One page not as its file makes every name read from those
+//! docs one that cannot be told, not of its sources ([`Untold::NotOfSources`]), with
+//! the first such page in the order of their paths: a re-export crosses crates, so no
+//! crate is told apart. So is a crate of the project whose docs hold no page of the
+//! source, a name two packages give their crates, a page whose file climbs out of the
+//! project, and a manifest that cannot be read. The docs of a crate that is no crate
+//! of the project (a dependency's) are not held, and each of their names cannot be
+//! told, not of its sources: nothing of the project is their source. The holding reads
+//! at most 2,000 pages and 512 MiB of them in all, each page of at most
+//! [`MAX_PAGE_BYTES`], 64 directories deep; past a bound, the docs cannot be held,
+//! and no name of them is told. Docs with no directory at all are not built, as
+//! before.
+//!
+//! KNOWN LIMITATION: what is held is that the files of the project the docs hold a
+//! copy of are as they are. These are not held, and an answer from them can be old
+//! with nothing said: a source a build script made, and what a macro reads from
+//! outside the sources; a file read by `include_str!` or `include_bytes!` (a README);
+//! an item re-exported from a dependency, whose version `Cargo.lock` may have moved;
+//! docs built from the same sources with other features, `cfg` or toolchain. And these
+//! are told as not of their sources though they may be (on the safe side): a crate
+//! with two files that are one page once their `..` is dropped (`src/outside/near.rs`
+//! and `outside/near.rs`: rustdoc writes one over the other); a build whose crate
+//! reads, by `include!` or `#[path]`, a file outside both the project and the build
+//! directory; a tree moved elsewhere with its build directory (building the docs
+//! again mends it); and docs built not to write the pages of the source. Building the
+//! docs again is the project's: the recipe a check runs builds them first (this
+//! repository's `just check` does, as its CI does), and a Git hook can help (one is
+//! not copied by a clone, so it is no more than a help).
 //!
 //! # Reading the HTML
 //!
@@ -324,7 +372,7 @@
 //! |---|---|
 //! | there | every segment is found; with the hashes of its promise, or, when its page cannot be read as a promise (or only presence is asked), for presence only, with why |
 //! | absent | the docs of its crate are there and rustdoc's, and a segment is not found |
-//! | cannot tell | where the docs are cannot be told; the docs of its crate are not built or not rustdoc's; a directory or a page on the way cannot be read, is too large, or leads outside the root and the build directory; or it goes on through a re-export whose link leads nowhere readable |
+//! | cannot tell | where the docs are cannot be told; the docs are not of the sources as they are, or its crate is none of the project's (not of its sources, above); the docs of its crate are not built or not rustdoc's; a directory or a page on the way cannot be read, is too large, or leads outside the root and the build directory; or it goes on through a re-export whose link leads nowhere readable |
 //! | not a name | the text is no Rust path of the grammar above |
 //!
 //! # What is compared
@@ -346,8 +394,10 @@
 //! as its source ([`Placement::Partly`]): the line `Source` of the heading of its page,
 //! or of the element of a member (a field and a variant, declared in the body of their
 //! type, take their type's), names a page `src/<crate>/<path>.html` of the docs, and
-//! the file is `<path>` under the directory of the root file of `<crate>`, a part
-//! `up` of it read as `..`. That file is looked at in the tree of the side as the
+//! the file is the one that page is of, by the rules the docs are held against the
+//! sources by (above, "What it stands on"): under the directory of the root file of
+//! `<crate>`, or, for a file outside it, under the first directory above that holds
+//! it; a part `up` read as `..`. That file is looked at in the tree of the side as the
 //! space `file` looks at one: the placement is its path, or, through links inside the
 //! root, each link entry and the name they lead to; it must be a file there. The thing
 //! a name names is in part elsewhere: its docs are made by the build.
@@ -380,20 +430,19 @@
 //! A name cannot be placed ([`Placement::Unplaced`], with why) when it is no Rust
 //! path; when the docs cannot be read or the item is not in them (absent, or cannot
 //! be told, as `resolve` says); when its page cannot be read or links to no page of
-//! the source; when the crate is none of the manifests (a dependency, docs left by an
-//! earlier build), two packages have it, or something that might have it cannot be
-//! read (a manifest, a member written with `**` or `[`, a member directory that is a
-//! symbolic link, a directory of a package's source that cannot be listed); when the
-//! path leads out of the project; or when the file is no file of the project, or is
-//! read through a link that leaves the root or is broken. A source rustdoc keeps
-//! outside the directory of the crate's root file (one a build writes, one a `#[path]`
-//! names elsewhere) is named by its whole path, so it is no file of the project, and
-//! the reason does not repeat the path. What an item's page says of its source is the
-//! build's: docs left by an earlier build place an item where its source was then.
+//! the source; when the docs are not of the sources as they are, or the crate is none
+//! of the manifests (a dependency), two packages have it, or something that might have
+//! it cannot be read (a manifest, a member written with `**` or `[`, a member directory
+//! that is a symbolic link, a directory of a package's source that cannot be listed);
+//! when the path leads out of the project; or when the file is no file of the project,
+//! or is read through a link that leaves the root or is broken. A source a build
+//! writes is named by rustdoc by its whole path, under the build directory, so it is
+//! no file of the project, and the reason does not repeat the path.
 //!
 //! [`Placement::Partly`]: whyshelf_core::domain::shelf::placement::Placement::Partly
 //! [`Placement::Unplaced`]: whyshelf_core::domain::shelf::placement::Placement::Unplaced
 //! [`Comparison::Presence`]: whyshelf_core::domain::shelf::artifact::Comparison::Presence
+//! [`Untold::NotOfSources`]: whyshelf_core::domain::shelf::artifact::Untold::NotOfSources
 //! [`ArtifactReading::of_bytes`]: whyshelf_core::domain::shelf::artifact::ArtifactReading::of_bytes
 
 mod catalog;
@@ -402,15 +451,20 @@ mod docs_path;
 mod docs_tree;
 #[cfg(test)]
 mod fixture;
+mod held;
 mod layout;
 mod lookup;
 mod moves;
 mod outside_docs;
 mod path;
 mod promise;
+mod sited;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use tokio::sync::OnceCell;
 
 use whyshelf_core::app::shelf::{
     Answers, Beyond, CannotList, DirListing, NamePlaces, NamePrefixes, NoReadBack, Side,
@@ -420,8 +474,8 @@ use whyshelf_core::domain::error::ValueError;
 use whyshelf_core::domain::location::{PathLiteral, RelPath};
 use whyshelf_core::domain::nonempty::{NonBlank, TextLiteral};
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, Comparison, PrefixMove, SpaceAsks, SpacePrefixes, SpaceReadings,
-    SpaceRenamed,
+    ArtifactName, ArtifactReading, Comparison, NotOfSources, PrefixMove, SpaceAsks, SpacePrefixes,
+    SpaceReadings, SpaceRenamed,
 };
 use whyshelf_core::domain::shelf::ledger::{GoneName, NameSuggestions};
 use whyshelf_core::domain::shelf::placement::Placement;
@@ -431,14 +485,16 @@ use super::super::state::files::FileStates;
 use super::super::state::{ProjectTree, StateError};
 use super::file::{self, Bounded};
 use catalog::CatalogLimits;
-use crates::Crates;
+use crates::{Crates, SourceOf};
 use docs_tree::{DocsAt, DocsTree, placed};
+use held::{HeldDocs, HoldLimits};
 pub use layout::{GENERATOR_MARK, ITEM_KINDS, MEMBER_KINDS};
 use lookup::{Found, Lookup};
 #[cfg(test)]
 use outside_docs::list;
 use path::RustPath;
 use promise::{Promise, Unreadable};
+use sited::Sited;
 
 /// The name of the space this adapter resolves names in.
 pub const RUST_ITEM_SPACE: &str = "rust-item";
@@ -461,13 +517,6 @@ pub const MAX_PAGE_BYTES: u64 = 32 * 1024 * 1024;
 /// where the docs are cannot be told. Settings are far smaller, and a file this small
 /// is read and parsed where it is asked for.
 pub const MAX_SETTINGS_BYTES: u64 = 1024 * 1024;
-
-/// What an item whose page names no file of the project is placed as. The path is not
-/// said: rustdoc names a source outside the directory of the crate's root file (one a
-/// build writes, one a `#[path]` names) by its whole path.
-const NOT_A_FILE: TextLiteral = TextLiteral::new(
-    "the source its page names is no file of the project (rustdoc names a source outside the directory of the crate's root file, such as one a build writes, by its whole path)",
-);
 
 /// What a reading asked of presence only says of any other comparison.
 const PRESENCE_ONLY: &str = "only presence was asked of the item, so what it promises was not read";
@@ -577,8 +626,12 @@ impl SpaceSuggest for RustItemSpace {
             ..CatalogLimits::default()
         };
         // The search reads the docs of the project as it is, through the space's own
-        // state, as a reading of it does.
-        let lookup = self.lookup_at(Side::After).await?;
+        // state, as a reading of it does: docs not of the sources are not searched, and
+        // the note says why.
+        let lookup = self
+            .lookup_at(Side::After)
+            .await?
+            .map_err(|none| none.to_string());
         moves::suggest(lookup, &limits, gone)
             .await
             .map_err(RustItemError::Reason)
@@ -595,6 +648,37 @@ pub struct RustItemSpace {
     target_dir: Option<PathBuf>,
     /// The most bytes of a page read.
     max_page: u64,
+    /// Whether the docs of each side are of its sources, held once for the run. This is
+    /// the one thing the space keeps between asks: the holding reads every page of the
+    /// source, and `current` is asked once a name, while a command that reads writes
+    /// nothing, so the sources and the docs do not change during a run and the answer
+    /// is the same each time it would be made. The composition root makes one space a
+    /// run; a test that changes a file makes the space again.
+    held: Arc<HeldSides>,
+}
+
+/// The holding of the docs of each side, made at most once ([`OnceCell`]).
+#[derive(Debug, Default)]
+struct HeldSides {
+    after: OnceCell<Result<HeldDocs, NoLookup>>,
+    before: OnceCell<Result<HeldDocs, NoLookup>>,
+}
+
+/// Why no lookup of the docs of a side is made: where they are cannot be told or read,
+/// or they are not of the sources of the side.
+#[derive(Debug, Clone)]
+enum NoLookup {
+    Untold(String),
+    NotOfSources(NotOfSources),
+}
+
+impl std::fmt::Display for NoLookup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Untold(why) => f.write_str(why),
+            Self::NotOfSources(not) => write!(f, "{not}"),
+        }
+    }
 }
 
 impl RustItemSpace {
@@ -612,6 +696,7 @@ impl RustItemSpace {
             state,
             target_dir: target_dir.filter(|dir| !dir.as_os_str().is_empty()),
             max_page: MAX_PAGE_BYTES,
+            held: Arc::default(),
         }
     }
 
@@ -652,10 +737,13 @@ impl RustItemSpace {
         }
         let mut lookup = match self.lookup_at(side).await? {
             Ok(lookup) => lookup,
-            Err(why) => {
-                let why = reason(why)?;
+            Err(none) => {
+                let reading = match none {
+                    NoLookup::Untold(why) => ArtifactReading::cannot_tell(reason(why)?),
+                    NoLookup::NotOfSources(not) => ArtifactReading::not_of_sources(not),
+                };
                 for (name, _, _) in paths {
-                    readings.insert(name.clone(), ArtifactReading::cannot_tell(why.clone()));
+                    readings.insert(name.clone(), reading.clone());
                 }
                 return Ok(readings);
             }
@@ -674,6 +762,7 @@ impl RustItemSpace {
                 Found::Unread(why) => ArtifactReading::there(reason(why)?),
                 Found::Absent => ArtifactReading::absent(),
                 Found::CannotTell(why) => ArtifactReading::cannot_tell(reason(why)?),
+                Found::NotOfSources(not) => ArtifactReading::not_of_sources(not),
             };
             readings.insert(name.clone(), reading);
         }
@@ -699,7 +788,9 @@ impl RustItemSpace {
                 .await
                 .ok()
                 .map(|promise| promise.text().into_bytes()),
-            Found::Unread(_) | Found::Absent | Found::CannotTell(_) => None,
+            Found::Unread(_) | Found::Absent | Found::CannotTell(_) | Found::NotOfSources(_) => {
+                None
+            }
         })
     }
 
@@ -731,28 +822,30 @@ impl RustItemSpace {
         }
         let mut lookup = match self.lookup_at(side).await? {
             Ok(lookup) => lookup,
-            Err(why) => {
-                let why = reason(why)?;
+            Err(none) => {
+                let why = reason(none.to_string())?;
                 for (name, _) in paths {
                     placed.insert(name.clone(), Placement::Unplaced(why.clone()));
                 }
                 return Ok(placed);
             }
         };
-        let mut crates: Option<Crates> = None;
         for (name, path) in paths {
             let file = match lookup.find(&path).await {
                 Found::There(place) => match lookup.source(&place).await {
-                    Ok(source) => {
-                        let crates = match crates.as_ref() {
-                            Some(crates) => crates,
-                            None => crates.insert(Crates::of(&self.state, side).await),
-                        };
-                        crates.file_of(&source)
-                    }
+                    // What the page of the source is of, by the rule the holding of the
+                    // docs reads it by.
+                    Ok(source) => match lookup.held().sources() {
+                        Some((crates, sited)) => match crates.file_of(&source, sited).await {
+                            SourceOf::File(file) => Ok(file),
+                            other => Err(other.unplaced(&source).unwrap_or_default()),
+                        },
+                        None => Err(NonBlank::from(NOT_IN_THE_DOCS).into_string()),
+                    },
                     Err(why) => Err(why),
                 },
                 Found::Unread(why) | Found::CannotTell(why) => Err(why),
+                Found::NotOfSources(not) => Err(not.to_string()),
                 Found::Absent => Err(NonBlank::from(NOT_IN_THE_DOCS).into_string()),
             };
             // The file is looked at in the tree of the side, as the space `file` looks
@@ -761,7 +854,7 @@ impl RustItemSpace {
                 Ok(file) => match file::placed_within(&self.state, side, &file).await {
                     file::Placed::Files { files, there: true } => Placement::Partly(files),
                     file::Placed::Files { there: false, .. } => {
-                        Placement::Unplaced(NonBlank::from(NOT_A_FILE))
+                        Placement::Unplaced(reason(crates::NOT_A_FILE.to_owned())?)
                     }
                     file::Placed::Unplaced(why) => Placement::Unplaced(reason(why)?),
                 },
@@ -773,17 +866,44 @@ impl RustItemSpace {
     }
 
     /// The lookup of the built docs of `side`, or why there is none: where they are
-    /// cannot be told ([`docs_at`](Self::docs_at)), or they are where the run cannot
-    /// read them ([`DocsAt::Untold`]: outside the project in a run of two sides).
-    async fn lookup_at(&self, side: Side) -> Result<Result<Lookup, String>, RustItemError> {
+    /// cannot be told ([`docs_at`](Self::docs_at)), they are where the run cannot read
+    /// them ([`DocsAt::Untold`]: outside the project in a run of two sides), or they are
+    /// not of the sources of the side ([`held::hold`]). Every reading of the docs
+    /// (`resolve`, `current`, where names live, the search for moves) has its lookup
+    /// here, so none reads a page of docs not held against the sources.
+    async fn lookup_at(&self, side: Side) -> Result<Result<Lookup, NoLookup>, RustItemError> {
+        let cell = match side {
+            Side::After => &self.held.after,
+            Side::Before => &self.held.before,
+        };
+        let held = cell.get_or_try_init(|| self.held_at(side)).await?;
+        Ok(held.clone().map(|held| Lookup::on(held, self.max_page)))
+    }
+
+    /// The docs of `side` held against its sources, or why no lookup is made: the one
+    /// place the holding is asked, and where the build directory and the root it is
+    /// held by are found ([`Sited`], from [`docs_at`](Self::docs_at)).
+    async fn held_at(&self, side: Side) -> Result<Result<HeldDocs, NoLookup>, RustItemError> {
         let at = match self.docs_at(side).await {
             Ok(at) => at,
-            Err(why) => return Ok(Err(why)),
+            Err(why) => return Ok(Err(NoLookup::Untold(why))),
         };
-        Ok(match DocsTree::of(&self.state, side, at).await? {
-            Ok(docs) => Ok(Lookup::on(docs, side, self.max_page)),
-            Err(why) => Err(why.as_str().to_owned()),
-        })
+        let docs = match DocsTree::of(&self.state, side, at.clone()).await? {
+            Ok(docs) => docs,
+            Err(why) => return Ok(Err(NoLookup::Untold(why.as_str().into_owned()))),
+        };
+        let sited = Sited::of(&self.state, side, &at, &docs).await?;
+        let crates = Crates::of(&self.state, side).await;
+        Ok(held::hold(
+            &self.state,
+            side,
+            docs,
+            crates,
+            sited,
+            &HoldLimits::default(),
+        )
+        .await
+        .map_err(NoLookup::NotOfSources))
     }
 
     /// The directory rustdoc writes the docs of the project in, as the project is
@@ -797,7 +917,7 @@ impl RustItemSpace {
                 .path_of(Side::After, &docs)
                 .map_err(|e| e.to_string()),
             DocsAt::Outside { docs, .. } => Ok(docs),
-            DocsAt::Untold(why) => Err(why.as_str().to_owned()),
+            DocsAt::Untold(why) => Err(why.as_str().into_owned()),
         }
     }
 
@@ -964,9 +1084,17 @@ mod tests {
         names.iter().map(|t| (n(t), comparisons.clone())).collect()
     }
 
-    /// The items whose docs are under `target`, given as `CARGO_TARGET_DIR`.
+    /// The items whose docs are under `target`, given as `CARGO_TARGET_DIR`, of the
+    /// project in the directory `project` under it (outside of which the docs are): the sources
+    /// [`fixture::sources`] writes there.
     fn at_target(target: &Path) -> RustItemSpace {
-        RustItemSpace::new(PathBuf::from("/nowhere"), Some(target.to_path_buf()))
+        RustItemSpace::new(target.join("project"), Some(target.to_path_buf()))
+    }
+
+    /// The sources of the docs under `target` of the crates `crates`, as
+    /// [`at_target`] reads them.
+    async fn sourced(target: &Path, crates: &[&str]) {
+        fixture::sources(&target.join("project"), &target.join("doc"), crates).await;
     }
 
     /// Whether the reading tells the thing is there under presence, with the one
@@ -1120,6 +1248,7 @@ mod tests {
         )
         .await;
         write(d, "doc/fake/struct.A.html", &page(&[])).await;
+        sourced(d, &["demo", "demo_infra", "fake"]).await;
         target
     }
 
@@ -1321,6 +1450,7 @@ mod tests {
             &page(&["method.x"; 20]),
         )
         .await;
+        sourced(target.path(), &["demo", "demo_infra", "fake", "tiny"]).await;
         let found = source
             .resolve(&asks_text(&["tiny::Big", "tiny::Big::x", "demo::Shelf"]))
             .await
@@ -1590,6 +1720,7 @@ mod tests {
             &whole("<h2 id=\"structs\" class=\"section-header\">Structs</h2>"),
         )
         .await;
+        sourced(d, &["demo"]).await;
         target
     }
 
@@ -1860,8 +1991,14 @@ mod tests {
     /// The page of a function `name` of the crate `demo`, whose line `Source` links to
     /// `src/<name>.rs` of the crate.
     fn sourced_fn(name: &str) -> String {
+        sourced_fn_at(name, name)
+    }
+
+    /// The page of a function `name` of the crate `demo`, whose line `Source` links to
+    /// the page of the source `src/demo/<source>.rs.html`.
+    fn sourced_fn_at(name: &str, source: &str) -> String {
         format!(
-            "<!DOCTYPE html><html><head>{GENERATOR_MARK}</head><body><main><section id=\"main-content\" class=\"content\"><div class=\"main-heading\"><h1>Function</h1><span class=\"sub-heading\"><a class=\"src\" href=\"../src/demo/{name}.rs.html#1-2\">Source</a></span></div><pre class=\"rust item-decl\"><code>pub fn {name}()</code></pre></section></main></body></html>"
+            "<!DOCTYPE html><html><head>{GENERATOR_MARK}</head><body><main><section id=\"main-content\" class=\"content\"><div class=\"main-heading\"><h1>Function</h1><span class=\"sub-heading\"><a class=\"src\" href=\"../src/demo/{source}.rs.html#1-2\">Source</a></span></div><pre class=\"rust item-decl\"><code>pub fn {name}()</code></pre></section></main></body></html>"
         )
     }
 
@@ -1902,13 +2039,36 @@ mod tests {
         .await;
         write(&d, "doc/demo/fn.located.html", &sourced_fn("located")).await;
         write(root, "src/located.rs", "pub fn located() {}\n").await;
+        // The pages of the source: the docs are of these sources.
+        for (file, text) in [
+            ("lib.rs", "mod located;\n"),
+            ("located.rs", "pub fn located() {}\n"),
+        ] {
+            write(
+                &d,
+                &format!("doc/src/demo/{file}.html"),
+                &fixture::source_page(text),
+            )
+            .await;
+        }
         // A source a build wrote, outside the directory of the crate's root file:
-        // rustdoc names it by the parts of its whole path, which no file of the project
-        // is at.
+        // rustdoc names it by the parts of its whole path, under the build directory,
+        // which no file of the project is at. Its page is not held against a file (its
+        // text would be no file's).
+        let built = format!(
+            "{}/debug/build/demo-1/out/built",
+            d.display().to_string().trim_start_matches('/')
+        );
         write(
             &d,
             "doc/demo/fn.built.html",
-            &sourced_fn("Users/dev/target/debug/build/demo-1/out/built"),
+            &sourced_fn_at("built", &built),
+        )
+        .await;
+        write(
+            &d,
+            &format!("doc/src/demo/{built}.rs.html"),
+            &fixture::source_page("pub fn built() {}\n"),
         )
         .await;
         write(
@@ -1970,6 +2130,41 @@ mod tests {
             })
         }
 
+        /// The docs are derived from the sources: here, docs whose page of the source is
+        /// of the crate before an edit of it.
+        async fn basis(&self, dir: &Path) -> conformance::Basis {
+            write(dir, "Cargo.toml", "[package]\nname = \"demo\"\n").await;
+            write(
+                dir,
+                "src/lib.rs",
+                "//! The demo crate.\npub struct Shelf;\n",
+            )
+            .await;
+            let d = dir.join(TARGET_DIR_NAME);
+            write(
+                &d,
+                "doc/demo/index.html",
+                &whole(&top_doc("The demo crate.")),
+            )
+            .await;
+            write(
+                &d,
+                "doc/demo/struct.Shelf.html",
+                &whole("<pre class=\"rust item-decl\"><code>pub struct Shelf;</code></pre>"),
+            )
+            .await;
+            write(
+                &d,
+                "doc/src/demo/lib.rs.html",
+                &fixture::source_page("//! The demo crate.\n"),
+            )
+            .await;
+            conformance::Basis::Derived(conformance::Shifted {
+                adapter: self.adapter_at(dir),
+                names: vec![n("demo"), n("demo::Shelf"), n("demo::Missing")],
+            })
+        }
+
         async fn tree(&self, dir: &Path) -> conformance::Tree {
             let root = dir.join("root");
             conformance_docs(&root).await;
@@ -2007,7 +2202,7 @@ mod tests {
                 ),
                 (
                     n("demo::built"),
-                    Placement::Unplaced(NonBlank::from(NOT_A_FILE)),
+                    Placement::Unplaced(NonBlank::new(crates::NOT_A_FILE).unwrap()),
                 ),
                 (
                     n("demo::Missing"),

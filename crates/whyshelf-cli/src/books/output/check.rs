@@ -17,7 +17,7 @@ use super::cover::{
     UnneededArtifactOut, artifact_lists, cover_link, exemption_lines, warn_lines,
 };
 use super::untold::{CHECK_UNTOLD, untold_line};
-use super::words::{plural, ran_by, schema_problem};
+use super::words::{plural, ran_by, schema_problem, untold_out};
 use super::{
     AbsentOut, DocRef, ExemptOut, HealthOut, MovedNameOut, Namer, RepeatedOut, UnknownOut,
     UnneededOut, standing,
@@ -532,6 +532,7 @@ pub fn books_check(check: &BooksCheck) -> BooksCheckOut {
                         name: u.artifact.name().to_string(),
                         space: u.artifact.space().to_string(),
                         why: u.why.to_string(),
+                        cause: untold_out(&u.why),
                     })
                     .collect(),
                 moved: moved

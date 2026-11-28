@@ -1,0 +1,77 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "address": "64bcca6e8d34c7fcffef219d66f8c819f8e476ea",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:f067b1fc33303e349de6be2697f331b00d5c04cc8bd420dd302638e52983133b",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_test.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "aca44089d907f54efe920efc3a2db56babd24a01",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:35effe70c3d58af7cfe552c160085f3fddaa795cf0391b0c82f545e07f4f71d0",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/readers_tests.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "aea99f69b14b05ce7f02d5f9742e28186182a94d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:a87cca64c098f0d3d592b806caa6fcb561ce75b7c249f9b0c7b4eb86c93aa1c7",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/tree_fixtures_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795872047857,
+  "expires": null,
+  "frame": [
+    {
+      "address": "0080b93db1409d7dd08668964b28ac6ada09057a",
+      "hash": "sha256:1f0bbed3d600e6e14ac4e2507d90fb972cfd5444b7f0c0ea06c2e64f63f82892",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "64"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cad2-37e9-76e8-8c16-174a6c7ee1f5"
+    }
+  ],
+  "id": "01a22251-0bfd-74a9-9873-9c517541cb6d",
+  "kind": "decision",
+  "reason": "the fixtures of the readers' tests now write the sources of the docs they write by hand, and the list of visibility counts follows the output module; no expected answer of a test changed, so what these verify holds as before",
+  "revision": "f6e7a11bc4f7d72b49791b6a372d2c78c7ffc382",
+  "seen": "sha256:96aa5bdb7c276e504a80b6f6b9f7f51003c86ab3f450ff36f301f24a16e9439c",
+  "seen_address": "e6d59c83aa6653d3338badf603a2577270753fec",
+  "subject": "01a1cad2-39f7-7193-ab89-6bfcc17747f4",
+  "v": 1,
+  "verb": "approve"
+}

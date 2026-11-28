@@ -10,7 +10,7 @@ use whyshelf_core::domain::shelf::graph::CycleSource;
 use whyshelf_core::domain::shelf::untold::untold_causes;
 
 use super::untold::{STALE_UNTOLD, untold_line};
-use super::words::{approve_phrase, approve_word};
+use super::words::{approve_phrase, approve_word, untold_out};
 use super::{
     ArtifactNamed, DocNamed, DocRef, HealthOut, Namer, NextRoot, RootOut, RowOut, UnknownOut,
 };
@@ -183,6 +183,7 @@ pub fn stale(report: &StaleReport, root: NextRoot<'_>) -> StaleOut {
                 name: u.artifact.name().to_string(),
                 space: u.artifact.space().to_string(),
                 why: u.why.to_string(),
+                cause: untold_out(&u.why),
             })
             .collect(),
         health: namer.health(&report.health),

@@ -1,0 +1,14 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795863191913,
+  "book": "verification",
+  "id": "01a221c9-ba67-715d-895d-ffa3e69ac4ff",
+  "kind": "exempt",
+  "link": "cases",
+  "reason": "The answers of the command line (books/output/) hold no test: rust-test cannot list them whole for the derives of serde's Serialize and schemars' JsonSchema on their items, which it does not expand, and no verification names them as evidence of their own; words.rs gained such items with the kind of why a name cannot be told (#225), and the exemption stands only while no test is found in it (DEC-112)",
+  "subject": {
+    "name": "crates/whyshelf-cli/src/books/output/words.rs",
+    "space": "file"
+  },
+  "v": 1
+}

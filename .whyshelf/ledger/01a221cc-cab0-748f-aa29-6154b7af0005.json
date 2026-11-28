@@ -1,0 +1,119 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:a3dca4ec018a1f7b491869fce908cb53e78d276330f6bd5c19a1489900d17848",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/artifact.rs::tests::a_reading_not_of_its_sources_cannot_be_told_under_any_comparison",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f3d22191ca745258595507cec550c77b5f6a64b8053c7ff639c458990bd9d9a9",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/artifact.rs::tests::names_of_one_build_not_of_its_sources_are_one_reason",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:b40d612a502c19fc7f38247cebc3b26d6305b29dc756fb45fcaede3a86e87db6",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/domain/shelf/artifact.rs::tests::what_is_not_of_its_sources_is_said_in_one_sentence_with_what_was_read_why_and_the_hint",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:233d85f874f18960fec367327a5d7d0895ad1efb12a3061ff8e3825f412b4129",
+      "link": "cases",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item.rs::tests::the_adapter_keeps_the_contract_of_an_adapter",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:99e864393b5daeb178572282aa491d861a61bab3e972c080920dc7163950388b",
+      "link": "cases",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/moves.rs::tests::docs_not_of_their_sources_are_not_searched_and_each_name_says_why",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:5dc4eb21f79d666efe3a9d59829df71940c06c7bd2e35ae5dbe506a67bcc94ba",
+      "link": "cases",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/moves.rs::tests::the_docs_of_a_dependency_are_not_searched_for_candidates",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:cd2fb8ae1f18ffc8f51bde35440081a3b35fbcc544dffdf0c2c4e74f95c1d3c7",
+      "link": "cases",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/sited.rs::tests::a_page_is_under_a_place_in_the_form_given_or_the_form_resolved_and_never_under_a_relative_one",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:78042c99e6bdaa1e0e312223575eb00a315e2691bb870301a41f5ee93d6b50db",
+      "link": "cases",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/sited.rs::tests::the_directory_above_a_path_is_none_at_the_top",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:54afefc613f870ba5ead7ef2760a1c03adb8dbe417bb7edd44d50c13735033c2",
+      "link": "cases",
+      "name": "crates/whyshelf-infra/src/shelf/state/git_tests.rs::a_side_of_git_has_no_resolved_path_and_a_directory_has_its_canonical_one",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:3d8ca3193a65c0c2780dec1120cc9e7dac8d9f0fd6ed882bf4ea262f672786c3",
+      "link": "cases",
+      "name": "crates/whyshelf-infra/src/shelf/state/git_tests.rs::the_docs_a_commit_holds_are_held_against_the_sources_of_that_commit",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "c5dffb64311bbcd9a1cdc30dbb24433ab2893d6a",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:eaed4287c8cdda9e9b442bf4f6c2bde096f2184634a1f29256f449e36701bc57",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/rust_item/held_tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795863391995,
+  "expires": null,
+  "frame": [
+    {
+      "address": "101e9ebb00e7e402d4257c741ca3c3a99c956777",
+      "hash": "sha256:50430d082f32f189274bd2a7408c7f767727ea2a84611c5cf514015c19686977",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "116"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a221c7-6b1b-7014-bd12-a2bc64a49b96"
+    }
+  ],
+  "id": "01a221cc-cab0-748f-aa29-6154b7af0005",
+  "kind": "decision",
+  "reason": "For #225: F-94 records the docs of rust-item read older than the sources; DEC-116 adds the promise of its sources and holds the built docs against the sources by content, the whole build at once, with no build run by whyshelf; V-145 and V-146 name the unit, conformance and end-to-end tests of it. Read against the code by its author in a review of the whole diff before the hand-over; checked by the tests they name, which pass, and the full test suite",
+  "revision": "f00aa52e2adfe992659965c175db80cda9371c4d",
+  "seen": "sha256:aff7d3789dbcc32cb066fed1e99bd78c7c97442ed147eea20fc5e672a2e2ad78",
+  "seen_address": "340a70a740e1136438ddd43db8eb21fe7a305789",
+  "subject": "01a221c7-6b1b-7014-bd12-a2bd27808c6c",
+  "v": 1,
+  "verb": "approve"
+}

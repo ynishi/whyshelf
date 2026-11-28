@@ -365,7 +365,7 @@ impl Read {
             AtSide::There(bytes) => Self::Bytes(bytes),
             AtSide::Absent => Self::Absent,
             AtSide::Dir => Self::Dir,
-            AtSide::Untold(why) => Self::Untold(why.as_str().to_owned()),
+            AtSide::Untold(why) => Self::Untold(why.to_string()),
             AtSide::Elsewhere { .. } => Self::Failed(Failure::of_walk(&Followed::<(), ()>::Left)),
         }
     }
@@ -377,7 +377,7 @@ impl Listed {
             DirListing::All(entries) | DirListing::Cut { entries, .. } => Self::Entries(entries),
             DirListing::NotADir(NotADir::Absent) => Self::Absent,
             DirListing::NotADir(NotADir::File) => Self::File,
-            DirListing::NotADir(NotADir::Untold(why)) => Self::Untold(why.as_str().to_owned()),
+            DirListing::NotADir(NotADir::Untold(why)) => Self::Untold(why.to_string()),
             DirListing::NotADir(NotADir::Elsewhere { .. }) => {
                 Self::Failed(Failure::of_walk(&Followed::<(), ()>::Left))
             }

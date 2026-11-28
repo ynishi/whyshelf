@@ -1,0 +1,15 @@
+{
+  "actor": "Yutaka Nishimura",
+  "at": 1795863391995,
+  "expires": null,
+  "frame": [],
+  "id": "01a221cc-c7fa-7463-8ce8-e52cf0dbab18",
+  "kind": "decision",
+  "reason": "For #225: F-94 records the docs of rust-item read older than the sources; DEC-116 adds the promise of its sources and holds the built docs against the sources by content, the whole build at once, with no build run by whyshelf; V-145 and V-146 name the unit, conformance and end-to-end tests of it. Read against the code by its author in a review of the whole diff before the hand-over; checked by the tests they name, which pass, and the full test suite",
+  "revision": "f00aa52e2adfe992659965c175db80cda9371c4d",
+  "seen": "sha256:17c81cf9e6046c890ef11a86e1284745db910edc510528d461430f07fee0aee6",
+  "seen_address": "150ef4bf87e9ad3ccd2c4ddca48be0ade91f7092",
+  "subject": "01a221c7-6b1b-7014-bd12-a2bb49fcde28",
+  "v": 1,
+  "verb": "approve"
+}

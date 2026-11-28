@@ -18,7 +18,7 @@ use whyshelf_core::domain::shelf::ledger::{ArtifactPin, FramePin, JudgementId, R
 use whyshelf_core::domain::shelf::schema::{BookName, EntryName};
 use whyshelf_core::domain::words::{Join, Mark, listed};
 
-use super::words::severity;
+use super::words::{UntoldOut, severity};
 use super::{DocRef, Namer, standing};
 
 /// A cause of an approval that does not hold.
@@ -209,6 +209,9 @@ pub struct UnknownOut {
     pub space: String,
     /// Why, as the adapter says.
     pub why: String,
+    /// The kind of why (`kind`), and what a kind says beside it.
+    #[serde(flatten)]
+    pub cause: UntoldOut,
 }
 
 impl Namer<'_> {
@@ -543,7 +546,7 @@ impl Namer<'_> {
                 declared: Vec::new(),
                 book: None,
                 why: None,
-                detail: unknown_detail(artifact, why.as_str()),
+                detail: unknown_detail(artifact, &why.as_str()),
             },
             Notice::NotCovered {
                 book,

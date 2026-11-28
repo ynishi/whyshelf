@@ -76,6 +76,12 @@
 //! stays inside the root (below); Git, run in the root. It declares no build
 //! directory.
 //!
+//! # What it stands on
+//!
+//! The file a name names, itself: its content is the answer, whatever made it (a file
+//! a build wrote is read as the source it is to this space). It reads nothing derived
+//! from a source, so there is nothing to hold against one.
+//!
 //! # The case of a path
 //!
 //! A path names a file only as written: one that differs from the name of an entry
@@ -813,6 +819,11 @@ mod tests {
             super::super::Adapter::File(
                 FileSpace::new(dir.to_path_buf()).with_max_file(MAX_TEST_FILE),
             )
+        }
+
+        /// It reads the files a name names themselves.
+        async fn basis(&self, _: &std::path::Path) -> conformance::Basis {
+            conformance::Basis::Sources
         }
 
         async fn tree(&self, dir: &std::path::Path) -> conformance::Tree {

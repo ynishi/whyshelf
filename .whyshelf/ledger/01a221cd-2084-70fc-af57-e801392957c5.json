@@ -1,0 +1,91 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:b18af3a25f02e223ddfa2bd6243b91b10e3049864b3d22d4261f81dc3e22b815",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs::another_file_in_the_way_is_named_after_the_declaration_and_nothing_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:f4145dc4019e195498eabcb5b7ef712355a3ca85163b5b12a875798c11f91670",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs::another_file_that_appears_before_its_write_stops_the_run_before_the_documents",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:956d3ed9d71203b3ebe932b188e2569a393a5e2c77ed870ca6393dd87e4ef379",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs::init_writes_the_other_files_as_they_are_after_the_declaration",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "hash": "sha256:6f4f0c9f9c5544b6ab05f382a10cf2e9a3c1278faed2d237c396936d3ca52b18",
+      "link": "cases",
+      "name": "crates/whyshelf-core/src/app/shelf/init_tests.rs::two_writes_at_one_path_or_one_under_another_are_refused_before_anything_is_written",
+      "space": "rust-test",
+      "state": "present"
+    },
+    {
+      "address": "e80ba603c1527dcd3488988ba5b1f6d881de3d7d",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:506925d48f02b9d8591eac9409b4710ec09cde1aad769e639395bf546d3e8a85",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/artifact/file.rs",
+      "space": "file",
+      "state": "present"
+    },
+    {
+      "address": "dac7228e8be0de1c65851d37fcfe0793ba3b5ab2",
+      "compare": {
+        "ignore": [
+          "//"
+        ],
+        "kind": "lines"
+      },
+      "hash": "sha256:100c97437a38f5d490cf6ac99f80453540088d1821905fb628347e67b46fb9c7",
+      "link": "tests",
+      "name": "crates/whyshelf-infra/src/shelf/init/tests.rs",
+      "space": "file",
+      "state": "present"
+    }
+  ],
+  "at": 1795863407184,
+  "expires": null,
+  "frame": [
+    {
+      "address": "8b706870cbac06039fa6de0e42af08f4ba530dcb",
+      "hash": "sha256:a6fb5160c904b99530d18041760c34aafc39a0c6d75b4ca92f70e630f1c5f0bf",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "67"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1cb50-fd1f-753b-a0ac-ff5f43dbf053"
+    }
+  ],
+  "id": "01a221cd-2084-70fc-af57-e801392957c5",
+  "kind": "decision",
+  "reason": "For #225, after its author's review of the whole diff: DEC-84 says the fourth promise, of its sources, and the eight headings; DEC-54 and DEC-96 say the docs are held against the sources and a dependency's docs are not walked; REQ-13 grounds F-94; the tests and helpers these documents name gained the holding of the docs (the fixtures write the sources the docs are of, the conformance hook declares what each adapter stands on, a reason not of the sources is a new kind of unknown), and what each claims still holds, checked by its tests and the full test suite",
+  "revision": "f00aa52e2adfe992659965c175db80cda9371c4d",
+  "seen": "sha256:6c0146ca6d501cd58aead1cf79ace5c51b0f86b44395835db60e413d8ab9678a",
+  "seen_address": "1cb1ef4b1d2e1962e70dff0de9de7e55764120b7",
+  "subject": "01a1cb50-ffb0-76e1-92c3-a31d7baca809",
+  "v": 1,
+  "verb": "approve"
+}

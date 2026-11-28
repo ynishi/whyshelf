@@ -20,12 +20,14 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use whyshelf_core::app::shelf::{
-    AtSide, ByteBound, DirListing, Entries, NotADir, Side, StateList, StateRead,
+    AtSide, ByteBound, DirListing, Entries, NotADir, StateList, StateRead,
 };
+use whyshelf_core::domain::shelf::artifact::NotOfSources;
 
 use super::super::on_blocking;
 use super::docs_path::DocsPath;
-use super::docs_tree::{BuiltDocs, DocsTree};
+use super::docs_tree::BuiltDocs;
+use super::held::HeldDocs;
 use super::layout::{GENERATOR_MARK, ITEM_KINDS, MemberKind, Place, TYPE_KINDS};
 use super::path::RustPath;
 use super::promise::{Promise, Unreadable, promise_of, source_link};
@@ -40,6 +42,9 @@ pub(super) enum Found {
     Unread(String),
     Absent,
     CannotTell(String),
+    /// The docs of its crate were not held against the sources of the project: a
+    /// crate that is none of the project's ([`HeldDocs::crate_of`]).
+    NotOfSources(NotOfSources),
 }
 
 /// The `index.html` of the directory of a module.
@@ -112,10 +117,11 @@ impl Failure {
 }
 
 /// The docs of one side, read for one resolution: each directory listed once, each
-/// page read once.
+/// page read once. It is made from the mark that the docs were held against the
+/// sources ([`HeldDocs`]) and from nothing else, so no page is read of docs that were
+/// not.
 pub(super) struct Lookup {
-    docs: DocsTree,
-    side: Side,
+    held: HeldDocs,
     max_page: u64,
     listings: BTreeMap<DocsPath, Option<BTreeSet<String>>>,
     pages: BTreeMap<DocsPath, Result<Arc<str>, String>>,
@@ -123,18 +129,11 @@ pub(super) struct Lookup {
 }
 
 impl Lookup {
-    /// The docs at `docs` of the project at `root`, as the project is (one side): a
-    /// lookup a test makes with no space around it.
-    #[cfg(test)]
-    pub(super) async fn new(root: &Path, docs: PathBuf, max_page: u64) -> Self {
-        Self::on(DocsTree::at(root, docs).await, Side::After, max_page)
-    }
-
-    /// The docs `docs`, read at `side`.
-    pub(super) fn on(docs: DocsTree, side: Side, max_page: u64) -> Self {
+    /// The docs `held` holds, read at the side it is of, each page of at most
+    /// `max_page` bytes.
+    pub(super) fn on(held: HeldDocs, max_page: u64) -> Self {
         Self {
-            docs,
-            side,
+            held,
             max_page,
             listings: BTreeMap::new(),
             pages: BTreeMap::new(),
@@ -142,14 +141,23 @@ impl Lookup {
         }
     }
 
+    /// The mark the lookup was made from.
+    pub(super) fn held(&self) -> &HeldDocs {
+        &self.held
+    }
+
     /// The directory rustdoc wrote the docs in, as a path of the file system.
     pub(super) fn docs_dir(&self) -> PathBuf {
-        self.docs.dir(self.side)
+        self.held.docs().dir(self.held.side())
     }
 
     /// Where `p` is, as a reader names it.
     fn shown(&self, p: &DocsPath) -> String {
-        self.docs.shown(self.side, p).display().to_string()
+        self.held
+            .docs()
+            .shown(self.held.side(), p)
+            .display()
+            .to_string()
     }
 
     /// What the pages asked for so far came to.
@@ -161,7 +169,7 @@ impl Lookup {
     /// and the build directory once symbolic links are resolved, or is a link that
     /// cannot be resolved ([`BuiltDocs::outside`]).
     pub(super) async fn outside(&self, p: &DocsPath) -> Option<String> {
-        self.docs.outside(self.side, p).await
+        self.held.docs().outside(self.held.side(), p).await
     }
 
     /// Whether `p` is a directory, read by listing it (no file is opened): none when
@@ -171,7 +179,13 @@ impl Lookup {
         if let Some(Some(_)) = self.listings.get(p) {
             return Some(true);
         }
-        match self.docs.list(self.side, Some(p)).await.ok()? {
+        match self
+            .held
+            .docs()
+            .list(self.held.side(), Some(p))
+            .await
+            .ok()?
+        {
             DirListing::All(entries) | DirListing::Cut { entries, .. } => {
                 self.listings.insert(p.clone(), Some(names_of(entries)));
                 Some(true)
@@ -186,7 +200,7 @@ impl Lookup {
     /// The names of the entries of a directory, or none when it cannot be listed.
     pub(super) async fn listing(&mut self, dir: &DocsPath) -> Option<&BTreeSet<String>> {
         if !self.listings.contains_key(dir) {
-            let names = match self.docs.list(self.side, Some(dir)).await {
+            let names = match self.held.docs().list(self.held.side(), Some(dir)).await {
                 Ok(DirListing::All(entries) | DirListing::Cut { entries, .. }) => {
                     Some(names_of(entries))
                 }
@@ -241,9 +255,10 @@ impl Lookup {
         let cannot =
             |why: &dyn Display| Failure::Unreadable(format!("{shown} cannot be read: {why}"));
         let read = self
-            .docs
+            .held
+            .docs()
             .read(
-                self.side,
+                self.held.side(),
                 &BTreeSet::from([page.clone()]),
                 ByteBound::at_most(self.max_page),
             )
@@ -319,6 +334,10 @@ impl Lookup {
                 ));
             }
             Err(why) => return Found::CannotTell(stopped(&self.shown(&index), &why)),
+        }
+        // The docs of a crate of rustdoc's that were not held (a dependency's).
+        if let Err(not) = self.held.crate_of(&path.krate) {
+            return Found::NotOfSources(not);
         }
         let mut at = At::Module(crate_dir);
         for segment in &path.rest {
@@ -460,7 +479,12 @@ impl Lookup {
         }) else {
             return nowhere(self);
         };
-        if !self.docs.inside_docs(self.side, &target).await {
+        if !self
+            .held
+            .docs()
+            .inside_docs(self.held.side(), &target)
+            .await
+        {
             return nowhere(self);
         }
         let Some(file) = target.file_name().map(str::to_owned) else {
@@ -581,7 +605,7 @@ mod tests {
         )
         .await;
         write(&docs, "demo/fn.out.html", &page("../../../x.rs.html")).await;
-        let mut lookup = Lookup::new(dir.path(), docs, 1 << 20).await;
+        let mut lookup = super::super::fixture::walk_lookup(dir.path(), docs, 1 << 20).await;
         let source = |found: Found| match found {
             Found::There(place) => place,
             other => panic!("there: {other:?}"),

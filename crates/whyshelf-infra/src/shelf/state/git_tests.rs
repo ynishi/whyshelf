@@ -11,7 +11,7 @@ use std::process::Stdio;
 use tokio::process::Command;
 use whyshelf_core::app::shelf::{SpaceAdapter, StateList, StateRead};
 use whyshelf_core::domain::shelf::artifact::{
-    ArtifactName, ArtifactReading, ArtifactState, Comparison, SpaceAsks,
+    ArtifactName, ArtifactReading, ArtifactState, Comparison, NotOfSourcesWhy, SpaceAsks,
 };
 
 use super::super::super::OpenError;
@@ -530,6 +530,97 @@ async fn neither_side_reads_what_the_system_resolves() {
         assert!(states.addresses(side, &names).await.unwrap().is_empty());
     }
     assert_eq!(states.system_read(), SystemRead::Untold(leaves_untold()));
+}
+
+#[tokio::test]
+async fn a_side_of_git_has_no_resolved_path_and_a_directory_has_its_canonical_one() {
+    if !git_installed().await {
+        return;
+    }
+    let r = repo().await;
+    let top = Beyond {
+        dir: None,
+        parts: Vec::new(),
+    };
+    let tree = ProjectTree::git(open(&r.repo, "HEAD", head()).await);
+    for side in [Side::Before, Side::After] {
+        assert_eq!(tree.real_path(side, &top).await, None);
+    }
+    let files = ProjectTree::files(FileStates::new(r.repo.clone()));
+    let canonical = tokio::fs::canonicalize(&r.repo).await.unwrap();
+    assert_eq!(
+        files.real_path(Side::After, &top).await,
+        Some(canonical.clone())
+    );
+    let d = Beyond {
+        dir: Some(rel("d")),
+        parts: Vec::new(),
+    };
+    assert_eq!(
+        files.real_path(Side::After, &d).await,
+        Some(canonical.join("d"))
+    );
+    // A build directory that is the top, as `target-dir = "."` names it.
+    let built = Beyond {
+        dir: None,
+        parts: Vec::new(),
+    };
+    assert_eq!(files.real_path(Side::After, &built).await, Some(canonical));
+    assert_eq!(files.real_path(Side::Before, &top).await, None);
+}
+
+#[tokio::test]
+async fn the_docs_a_commit_holds_are_held_against_the_sources_of_that_commit() {
+    if !git_installed().await {
+        return;
+    }
+    const MARK: &str = "<meta name=\"generator\" content=\"rustdoc\">";
+    const LIB: &str = "pub struct Shelf;\n";
+    let r = repo().await;
+    write(&r.repo, "Cargo.toml", "[package]\nname = \"demo\"\n").await;
+    write(&r.repo, "src/lib.rs", LIB).await;
+    let page = |body: &str| format!("<html><head>{MARK}</head><body>{body}</body></html>");
+    write(&r.repo, "target/doc/demo/index.html", &page("")).await;
+    write(&r.repo, "target/doc/demo/struct.Shelf.html", &page("")).await;
+    write(
+        &r.repo,
+        "target/doc/src/demo/lib.rs.html",
+        &page(&format!("<pre class=\"rust\"><code>{LIB}</code></pre>")),
+    )
+    .await;
+    git(&r.repo, &["add", "-A"]).await;
+    git(&r.repo, &["commit", "-q", "-m", "docs"]).await;
+    let item = ArtifactName::new("demo::Shelf").unwrap();
+    let read = |tree: ProjectTree| async move {
+        let space = RustItemSpace::on(tree, None);
+        SpaceAdapter::resolve(
+            &space,
+            Side::After,
+            &asks(&["demo::Shelf"], Comparison::Presence),
+        )
+        .await
+        .unwrap()
+    };
+    let found = read(ProjectTree::git(open(&r.repo, "HEAD", head()).await)).await;
+    assert!(found[&item].is_present(), "{:?}", found[&item]);
+    // The source committed again, and not the docs.
+    write(
+        &r.repo,
+        "src/lib.rs",
+        "pub struct Shelf;\npub struct Added;\n",
+    )
+    .await;
+    git(&r.repo, &["commit", "-q", "-am", "source"]).await;
+    let found = read(ProjectTree::git(open(&r.repo, "HEAD", head()).await)).await;
+    assert!(
+        matches!(
+            found[&item].state(&Comparison::Presence),
+            ArtifactState::Unknown(Untold::NotOfSources(not))
+                if not.why() == &NotOfSourcesWhy::Differs { file: rel("src/lib.rs") }
+        ),
+        "{:?}",
+        found[&item]
+    );
 }
 
 fn leaves_untold() -> Untold {

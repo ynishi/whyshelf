@@ -7,7 +7,8 @@
 //! | what | what it does |
 //! |---|---|
 //! | `Crates::of` | the targets of the project at a side: its libraries and binaries are its crates |
-//! | `Crates::file_of` | the file of the project a page of the source in the docs is of, or why it cannot be told |
+//! | `Crates::crate_dir` | the directory of the root file of a crate of the project, or what the crate is instead ([`SourceOf`]) |
+//! | `Crates::file_of` | the file of the project a page of the source in the docs is of, or what it is instead ([`SourceOf`]) |
 //!
 //! The rule of which manifests are read, which crates a package has and where the
 //! source of each is, is on the page of the space, "Where a name lives"
@@ -15,14 +16,27 @@
 //! What could not be read of the project is kept with why, and a crate not found then
 //! cannot be told, rather than not one of the project.
 //!
+//! The file of a page is told by the part `P` of its place after `src/<crate>/` (its
+//! last part without `.html`), by the first of these that applies:
+//!
+//! | rule | when | the page is of |
+//! |---|---|---|
+//! | 1 | `P` starts with the parts of the build directory, as an absolute path ([`Sited`], either form) | a source a build made ([`SourceOf::MadeByBuild`]) |
+//! | 2 | `P` starts with the parts of the root of the project, as an absolute path | the file of the rest of `P` ([`SourceOf::File`]) |
+//! | 3 | `P` has a part `up` (rustdoc's `..`, as older versions write it) | the file `P` names from the directory of the crate's root file, `up` read as `..`; one that climbs past the root leaves the project ([`SourceOf::LeavesProject`]) |
+//! | 4 | any other | the first file of the side of `P` under the directory of the crate's root file, then under each directory above it up to the root: rustdoc drops a `..` of a path and does not say how many there were; with none there, the one under the directory of the crate's root file |
+//!
 //! This module reads the project through its state alone, as every reader does.
 
 use whyshelf_core::app::shelf::Side;
 use whyshelf_core::domain::location::RelPath;
+use whyshelf_core::domain::nonempty::NonBlank;
 
 use super::super::super::state::ProjectTree;
-use super::super::targets::{CrateOf, MANIFEST, Targets, Top, shown};
+use super::super::file;
+use super::super::targets::{CrateOf, Dir, MANIFEST, Targets, Top, shown};
 use super::docs_path::DocsPath;
+use super::sited::Sited;
 
 /// The name rustdoc gives the directory of the pages of the source, at the top of the
 /// docs.
@@ -31,10 +45,64 @@ const SOURCE_DIR: &str = "src";
 /// The part rustdoc writes in the path of a page of the source for `..`.
 const UP: &str = "up";
 
+/// What a page of the source in the docs is of ([`Crates::file_of`]), or, for a crate,
+/// what it is instead of one of the project ([`Crates::crate_dir`]): the one value
+/// that the holding of the docs against the sources and the place of a name read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum SourceOf {
+    /// A file of the project, by the rules of the module page.
+    File(RelPath),
+    /// A source a build made, in the build directory: no file of the project.
+    MadeByBuild,
+    /// A path that climbs out of the project, or is no path of it.
+    LeavesProject,
+    /// The crate is no crate of the project's manifests (a dependency).
+    NoCrate,
+    /// Two packages of the project have a crate of the name, and why it is said so.
+    TwoCrates(NonBlank),
+    /// No crate of the manifests read has the name, and some could not be read: why.
+    ManifestsUnread(NonBlank),
+    /// The place is no page of the source (`src/<crate>/<path>.html`).
+    NotASourcePage,
+}
+
+impl SourceOf {
+    /// What an item placed by it is told when it names no file, as a reason writes it,
+    /// for the page `page`; none for a file.
+    pub(super) fn unplaced(&self, page: &DocsPath) -> Option<String> {
+        let parts: Vec<&str> = page.parts().collect();
+        let krate = parts.get(1).copied().unwrap_or_default();
+        match self {
+            Self::File(_) => None,
+            Self::MadeByBuild => Some(NOT_A_FILE.to_owned()),
+            Self::LeavesProject => Some(format!(
+                "the source of the crate `{krate}` leads out of the project: {}",
+                parts.join("/")
+            )),
+            Self::NoCrate => Some(format!(
+                "the crate `{krate}` is no crate of the project's manifests (a dependency)"
+            )),
+            Self::TwoCrates(why) | Self::ManifestsUnread(why) => Some(why.to_string()),
+            Self::NotASourcePage => Some(format!(
+                "the docs link to no page of the source: {}",
+                parts.join("/")
+            )),
+        }
+    }
+}
+
+/// What an item whose page names a source a build made is placed as. The path is not
+/// said: rustdoc names such a source by its whole path.
+pub(super) const NOT_A_FILE: &str = "the source its page names is no file of the project (rustdoc names a source outside the directory of the crate's root file, such as one a build writes, by its whole path)";
+
 /// The crates of the project at one side, by the name rustdoc gives each: the targets
 /// of the project.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub(super) struct Crates {
+    /// The tree of the project, and the side read: where a file of rule 4 is looked
+    /// for.
+    state: ProjectTree,
+    side: Side,
     /// The targets of the project.
     targets: Targets,
     /// What could not be read, each with why: a manifest, a member, a directory of a
@@ -51,84 +119,135 @@ impl Crates {
         if targets.top() == Top::Absent {
             unread.push(format!("the project has no {MANIFEST}"));
         }
-        Self { targets, unread }
+        Self {
+            state: state.clone(),
+            side,
+            targets,
+            unread,
+        }
     }
 
-    /// The file of the project the page of the source `page` is of: the part after
-    /// `src/<crate>/` and before `.html`, under the directory of the crate's source,
-    /// or why it cannot be told.
-    pub(super) fn file_of(&self, page: &DocsPath) -> Result<RelPath, String> {
-        let parts: Vec<&str> = page.parts().collect();
-        let (krate, below) = match parts.as_slice() {
-            [top, krate, below @ ..] if *top == SOURCE_DIR && !below.is_empty() => (*krate, below),
-            _ => {
-                return Err(format!(
-                    "the docs link to no page of the source: {}",
-                    joined(&parts)
-                ));
-            }
+    /// The directory of the root file of the crate `krate` of the project, or what the
+    /// crate is instead: none of the project ([`SourceOf::NoCrate`]), two
+    /// ([`SourceOf::TwoCrates`]), or not found while some manifest could not be read
+    /// ([`SourceOf::ManifestsUnread`]).
+    pub(super) fn crate_dir(&self, krate: &str) -> Result<Dir, SourceOf> {
+        // The texts below are never blank: a blank one would be no page of the source.
+        let said = |text: String, of: fn(NonBlank) -> SourceOf| {
+            NonBlank::new(text).map_or(SourceOf::NotASourcePage, of)
         };
-        let dir = match self.targets.crate_named(krate) {
-            CrateOf::One(target) => target.root_dir(),
-            CrateOf::Two(one, two) => {
-                return Err(format!(
+        match self.targets.crate_named(krate) {
+            CrateOf::One(target) => Ok(target.root_dir()),
+            CrateOf::Two(one, two) => Err(said(
+                format!(
                     "two packages of the project have a crate `{krate}`, under {} and {}",
                     shown(&one.root_dir()),
                     shown(&two.root_dir())
-                ));
-            }
-            CrateOf::None if self.unread.is_empty() => {
-                return Err(format!(
-                    "the crate `{krate}` is no crate of the project's manifests (a dependency, or docs left by an earlier build)"
-                ));
-            }
-            CrateOf::None => {
-                return Err(format!(
+                ),
+                SourceOf::TwoCrates,
+            )),
+            CrateOf::None if self.unread.is_empty() => Err(SourceOf::NoCrate),
+            CrateOf::None => Err(said(
+                format!(
                     "the crate `{krate}` is no crate of the manifests read, and some could not be: {}",
                     self.unread.join("; ")
-                ));
-            }
+                ),
+                SourceOf::ManifestsUnread,
+            )),
+        }
+    }
+
+    /// What the page of the source `page` is of, by the rules of the module page, with
+    /// `sited` where the docs were built from and into: a file of the project, or what
+    /// it is instead.
+    pub(super) async fn file_of(&self, page: &DocsPath, sited: &Sited) -> SourceOf {
+        let parts: Vec<&str> = page.parts().collect();
+        let (krate, below) = match parts.as_slice() {
+            [top, krate, below @ ..] if *top == SOURCE_DIR && !below.is_empty() => (*krate, below),
+            _ => return SourceOf::NotASourcePage,
         };
-        let mut file = dir;
-        for (at, part) in below.iter().enumerate() {
-            let part = match (at + 1 == below.len(), part.strip_suffix(".html")) {
-                (true, Some(name)) => name,
-                (true, None) => {
-                    return Err(format!(
-                        "the docs link to no page of the source: {}",
-                        joined(&parts)
-                    ));
+        let mut rest: Vec<String> = below.iter().map(|part| (*part).to_owned()).collect();
+        match rest
+            .last_mut()
+            .and_then(|last| last.strip_suffix(".html").map(str::to_owned))
+        {
+            Some(name) if !name.is_empty() => {
+                if let Some(last) = rest.last_mut() {
+                    *last = name;
                 }
-                (false, _) => part,
+            }
+            _ => return SourceOf::NotASourcePage,
+        }
+        let dir = match self.crate_dir(krate) {
+            Ok(dir) => dir,
+            Err(instead) => return instead,
+        };
+        // 1: a source the build made, by its whole path.
+        if sited.build.rest(&rest).is_some() {
+            return SourceOf::MadeByBuild;
+        }
+        // 2: a file of the project, by its whole path.
+        if let Some(under) = sited.root.rest(&rest) {
+            return file_at(under);
+        }
+        // 3: rustdoc's `up` for `..`.
+        if rest.iter().any(|part| part == UP) {
+            let mut file = dir;
+            for part in rest {
+                if part == UP {
+                    if file.pop().is_none() {
+                        return SourceOf::LeavesProject;
+                    }
+                } else {
+                    file.push(part);
+                }
+            }
+            return file_at(&file);
+        }
+        // 4: the first file of the side from the directory of the crate's root file up.
+        let first = joined(&dir, &rest);
+        for above in (0..=dir.len()).rev() {
+            let Ok(path) = joined(&dir[..above], &rest).parse::<RelPath>() else {
+                continue;
             };
-            if part == UP {
-                if file.pop().is_none() {
-                    return Err(format!(
-                        "the source of the crate `{krate}` leads out of the project: {}",
-                        joined(&parts)
-                    ));
-                }
-            } else {
-                file.push(part.to_owned());
+            let there = match file::placed_within(&self.state, self.side, &path).await {
+                file::Placed::Files { there, .. } => there,
+                file::Placed::Unplaced(_) => true,
+            };
+            if there {
+                return SourceOf::File(path);
             }
         }
-        file.join("/").parse().map_err(|e| {
-            format!("the source of the crate `{krate}` is no path of the project: {e}")
-        })
+        file_at_text(&first)
     }
 }
 
-/// The parts of a place in the docs, as a reason writes them.
-fn joined(parts: &[&str]) -> String {
-    parts.join("/")
+/// The file at the parts `parts`, or a path that leaves the project when they are no
+/// path of it.
+fn file_at(parts: &[String]) -> SourceOf {
+    file_at_text(&parts.join("/"))
+}
+
+fn file_at_text(text: &str) -> SourceOf {
+    text.parse().map_or(SourceOf::LeavesProject, SourceOf::File)
+}
+
+/// The path of `rest` under the directory `dir`, as text.
+fn joined(dir: &[String], rest: &[String]) -> String {
+    dir.iter()
+        .chain(rest)
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use super::super::super::targets::matches;
     use super::super::fixture::write;
+    use super::super::sited::Forms;
     use super::*;
 
     fn page(text: &str) -> DocsPath {
@@ -137,6 +256,20 @@ mod tests {
 
     fn file(text: &str) -> RelPath {
         text.parse().unwrap()
+    }
+
+    /// What the page `text` is of, as a file or the reason an item placed by it is
+    /// told, where neither the root nor the build directory is a whole path of it.
+    async fn of(crates: &Crates, text: &str) -> Result<RelPath, String> {
+        let sited = Sited {
+            root: Forms::new(PathBuf::from("/nowhere/root"), None),
+            build: Forms::new(PathBuf::from("/nowhere/build"), None),
+        };
+        let page = page(text);
+        match crates.file_of(&page, &sited).await {
+            SourceOf::File(file) => Ok(file),
+            other => Err(other.unplaced(&page).unwrap_or_default()),
+        }
     }
 
     async fn crates_at(root: &Path) -> Crates {
@@ -163,31 +296,31 @@ mod tests {
         write(dir.path(), "src/lib.rs", "pub mod a;\n").await;
         let crates = crates_at(dir.path()).await;
         assert_eq!(
-            crates.file_of(&page("src/my_demo/lib.rs.html")),
+            of(&crates, "src/my_demo/lib.rs.html").await,
             Ok(file("src/lib.rs"))
         );
         assert_eq!(
-            crates.file_of(&page("src/my_demo/a/b.rs.html")),
+            of(&crates, "src/my_demo/a/b.rs.html").await,
             Ok(file("src/a/b.rs"))
         );
         // A part `up` is rustdoc's `..`.
         assert_eq!(
-            crates.file_of(&page("src/my_demo/up/build.rs.html")),
+            of(&crates, "src/my_demo/up/build.rs.html").await,
             Ok(file("build.rs"))
         );
         assert!(
-            crates
-                .file_of(&page("src/my_demo/up/up/x.rs.html"))
+            of(&crates, "src/my_demo/up/up/x.rs.html")
+                .await
                 .unwrap_err()
                 .contains("out of the project")
         );
         assert!(
-            crates
-                .file_of(&page("src/serde/lib.rs.html"))
+            of(&crates, "src/serde/lib.rs.html")
+                .await
                 .unwrap_err()
                 .contains("no crate of the project")
         );
-        assert!(crates.file_of(&page("my_demo/struct.A.html")).is_err());
+        assert!(of(&crates, "my_demo/struct.A.html").await.is_err());
     }
 
     #[tokio::test]
@@ -204,14 +337,14 @@ mod tests {
         let crates = crates_at(dir.path()).await;
         // No `[lib]` and no `src/lib.rs`: the crate `tool` is the binary, under `cli`.
         assert_eq!(
-            crates.file_of(&page("src/tool/main.rs.html")),
+            of(&crates, "src/tool/main.rs.html").await,
             Ok(file("cli/main.rs"))
         );
         // With a `src/lib.rs`, the library of the name is the crate.
         write(dir.path(), "src/lib.rs", "pub mod util;\n").await;
         let crates = crates_at(dir.path()).await;
         assert_eq!(
-            crates.file_of(&page("src/tool/util.rs.html")),
+            of(&crates, "src/tool/util.rs.html").await,
             Ok(file("src/util.rs"))
         );
     }
@@ -233,19 +366,21 @@ mod tests {
         write(root, "src/bin/two/part.rs", "pub fn x() {}\n").await;
         write(root, "tools/extra.rs", "fn main() {}\n").await;
         let crates = crates_at(root).await;
-        let of = |crates: &Crates, text: &str| crates.file_of(&page(text));
         // A `[[bin]]` declared, and still `src/main.rs` and `src/bin/*` by the layout.
         assert_eq!(
-            of(&crates, "src/extra/extra.rs.html"),
+            of(&crates, "src/extra/extra.rs.html").await,
             Ok(file("tools/extra.rs"))
         );
-        assert_eq!(of(&crates, "src/kit/main.rs.html"), Ok(file("src/main.rs")));
         assert_eq!(
-            of(&crates, "src/one/one.rs.html"),
+            of(&crates, "src/kit/main.rs.html").await,
+            Ok(file("src/main.rs"))
+        );
+        assert_eq!(
+            of(&crates, "src/one/one.rs.html").await,
             Ok(file("src/bin/one.rs"))
         );
         assert_eq!(
-            of(&crates, "src/two/part.rs.html"),
+            of(&crates, "src/two/part.rs.html").await,
             Ok(file("src/bin/two/part.rs"))
         );
         // A declared binary of a found one's name takes its place.
@@ -257,7 +392,7 @@ mod tests {
         .await;
         let crates = crates_at(root).await;
         assert_eq!(
-            of(&crates, "src/one/extra.rs.html"),
+            of(&crates, "src/one/extra.rs.html").await,
             Ok(file("tools/extra.rs"))
         );
         // `autobins = false`: only what is declared.
@@ -269,11 +404,11 @@ mod tests {
         .await;
         let crates = crates_at(root).await;
         assert_eq!(
-            of(&crates, "src/extra/extra.rs.html"),
+            of(&crates, "src/extra/extra.rs.html").await,
             Ok(file("tools/extra.rs"))
         );
         for gone in ["src/kit/main.rs.html", "src/one/one.rs.html"] {
-            assert!(of(&crates, gone).is_err(), "{gone}");
+            assert!(of(&crates, gone).await.is_err(), "{gone}");
         }
         // A declared binary with no path, `autobins = false`: its path is still the
         // layout's, `src/bin/<name>/main.rs` among them.
@@ -285,10 +420,10 @@ mod tests {
         .await;
         let crates = crates_at(root).await;
         assert_eq!(
-            of(&crates, "src/two/part.rs.html"),
+            of(&crates, "src/two/part.rs.html").await,
             Ok(file("src/bin/two/part.rs"))
         );
-        assert!(of(&crates, "src/one/one.rs.html").is_err());
+        assert!(of(&crates, "src/one/one.rs.html").await.is_err());
     }
 
     #[tokio::test]
@@ -299,7 +434,6 @@ mod tests {
         write(root, "src/bin/one.rs", "fn main() {}\n").await;
         write(root, "tools/extra.rs", "fn main() {}\n").await;
         let declared = "[[bin]]\nname = \"extra\"\npath = \"tools/extra.rs\"\n";
-        let of = |crates: &Crates, text: &str| crates.file_of(&page(text));
         // No edition written is 2015: only what is declared.
         write(
             root,
@@ -309,11 +443,11 @@ mod tests {
         .await;
         let crates = crates_at(root).await;
         assert_eq!(
-            of(&crates, "src/extra/extra.rs.html"),
+            of(&crates, "src/extra/extra.rs.html").await,
             Ok(file("tools/extra.rs"))
         );
-        assert!(of(&crates, "src/kit/main.rs.html").is_err());
-        assert!(of(&crates, "src/one/one.rs.html").is_err());
+        assert!(of(&crates, "src/kit/main.rs.html").await.is_err());
+        assert!(of(&crates, "src/one/one.rs.html").await.is_err());
         // `autobins = true` finds them again; so does the edition 2018 and later.
         for package in [
             "[package]\nname = \"kit\"\nautobins = true\n",
@@ -322,7 +456,7 @@ mod tests {
             write(root, MANIFEST, &format!("{package}{declared}")).await;
             let crates = crates_at(root).await;
             assert_eq!(
-                of(&crates, "src/one/one.rs.html"),
+                of(&crates, "src/one/one.rs.html").await,
                 Ok(file("src/bin/one.rs")),
                 "{package}"
             );
@@ -337,12 +471,15 @@ mod tests {
         )
         .await;
         let crates = crates_at(root).await;
-        assert_eq!(of(&crates, "src/kit/main.rs.html"), Ok(file("src/main.rs")));
+        assert_eq!(
+            of(&crates, "src/kit/main.rs.html").await,
+            Ok(file("src/main.rs"))
+        );
         // With no binary declared, the layout is read whatever the edition.
         write(root, MANIFEST, "[package]\nname = \"kit\"\n").await;
         let crates = crates_at(root).await;
         assert_eq!(
-            of(&crates, "src/one/one.rs.html"),
+            of(&crates, "src/one/one.rs.html").await,
             Ok(file("src/bin/one.rs"))
         );
     }
@@ -359,7 +496,7 @@ mod tests {
         )
         .await;
         let crates = crates_at(root).await;
-        assert!(crates.file_of(&page("src/kit/lib.rs.html")).is_err());
+        assert!(of(&crates, "src/kit/lib.rs.html").await.is_err());
     }
 
     #[tokio::test]
@@ -388,15 +525,20 @@ mod tests {
             write(root, &format!("{at}/src/lib.rs"), "pub fn x() {}\n").await;
         }
         let crates = crates_at(root).await;
-        let of = |text: &str| crates.file_of(&page(text));
-        assert_eq!(of("src/new/lib.rs.html"), Ok(file("crates/new/src/lib.rs")));
         assert_eq!(
-            of("src/kept/lib.rs.html"),
+            of(&crates, "src/new/lib.rs.html").await,
+            Ok(file("crates/new/src/lib.rs"))
+        );
+        assert_eq!(
+            of(&crates, "src/kept/lib.rs.html").await,
             Ok(file("crates/old/kept/src/lib.rs"))
         );
-        assert_eq!(of("src/yb/lib.rs.html"), Ok(file("vendor/y/b/src/lib.rs")));
-        assert!(of("src/old/lib.rs.html").is_err());
-        assert!(of("src/xa/lib.rs.html").is_err());
+        assert_eq!(
+            of(&crates, "src/yb/lib.rs.html").await,
+            Ok(file("vendor/y/b/src/lib.rs"))
+        );
+        assert!(of(&crates, "src/old/lib.rs.html").await.is_err());
+        assert!(of(&crates, "src/xa/lib.rs.html").await.is_err());
     }
 
     #[cfg(unix)]
@@ -420,7 +562,7 @@ mod tests {
             .await
             .unwrap();
         let crates = crates_at(root).await;
-        let why = crates.file_of(&page("src/far/lib.rs.html")).unwrap_err();
+        let why = of(&crates, "src/far/lib.rs.html").await.unwrap_err();
         assert!(why.contains("symbolic link"), "{why}");
         // A `src` that cannot be listed is not read, and said: not a library missing.
         let src = root.join("crates/near/src");
@@ -437,7 +579,7 @@ mod tests {
             .unwrap();
         // Run as a user every directory opens to (root), it is no case to test.
         if locked {
-            let why = crates.file_of(&page("src/near/lib.rs.html")).unwrap_err();
+            let why = of(&crates, "src/near/lib.rs.html").await.unwrap_err();
             assert!(why.contains("could not be"), "{why}");
         }
     }
@@ -486,21 +628,23 @@ mod tests {
             write(root, lib, "pub fn x() {}\n").await;
         }
         let crates = crates_at(root).await;
-        let of = |text: &str| crates.file_of(&page(text));
         assert_eq!(
-            of("src/my_core/app/x.rs.html"),
+            of(&crates, "src/my_core/app/x.rs.html").await,
             Ok(file("crates/core/src/app/x.rs"))
         );
         assert_eq!(
-            of("src/my/main.rs.html"),
+            of(&crates, "src/my/main.rs.html").await,
             Ok(file("crates/cli/src/main.rs"))
         );
         assert_eq!(
-            of("src/other/top.rs.html"),
+            of(&crates, "src/other/top.rs.html").await,
             Ok(file("crates/lib/code/top.rs"))
         );
-        assert_eq!(of("src/tool/lib.rs.html"), Ok(file("tool/src/lib.rs")));
-        assert!(of("src/skip/lib.rs.html").is_err());
+        assert_eq!(
+            of(&crates, "src/tool/lib.rs.html").await,
+            Ok(file("tool/src/lib.rs"))
+        );
+        assert!(of(&crates, "src/skip/lib.rs.html").await.is_err());
         assert_eq!(crates.unread, Vec::<String>::new());
     }
 
@@ -520,21 +664,21 @@ mod tests {
         write(root, "b/src/lib.rs", "pub fn x() {}\n").await;
         let crates = crates_at(root).await;
         assert!(
-            crates
-                .file_of(&page("src/same/lib.rs.html"))
+            of(&crates, "src/same/lib.rs.html")
+                .await
                 .unwrap_err()
                 .contains("two packages")
         );
         assert!(
-            crates
-                .file_of(&page("src/elsewhere/lib.rs.html"))
+            of(&crates, "src/elsewhere/lib.rs.html")
+                .await
                 .unwrap_err()
                 .contains("`**`")
         );
         // A member with `[` is not read either, and says so.
         assert!(
-            crates
-                .file_of(&page("src/elsewhere/lib.rs.html"))
+            of(&crates, "src/elsewhere/lib.rs.html")
+                .await
                 .unwrap_err()
                 .contains("`[`")
         );
@@ -542,8 +686,8 @@ mod tests {
         let bare = tempfile::tempdir().unwrap();
         let crates = crates_at(bare.path()).await;
         assert!(
-            crates
-                .file_of(&page("src/demo/lib.rs.html"))
+            of(&crates, "src/demo/lib.rs.html")
+                .await
                 .unwrap_err()
                 .contains("has no Cargo.toml")
         );

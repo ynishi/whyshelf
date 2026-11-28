@@ -42,7 +42,11 @@
 //!   the root, places a name read through a link inside the root in the link and what
 //!   it leads to, and gives the same answers asked again and over the tree written in
 //!   another place;
-//! - the seven headings of the module page.
+//! - of its sources, as the hook declares what the adapter stands on ([`Basis`]): an
+//!   adapter that reads something derived from its sources tells no name there or
+//!   absent over a tree where that is not of them, and each cannot be told as not of
+//!   them; one that reads its sources is asked nothing more;
+//! - the eight headings of the module page.
 //!
 //! It does not check that large inputs are worked on a blocking thread, that nothing
 //! else is read or written, the bound of time (the tests of the space `file` hold it
@@ -317,6 +321,26 @@ pub(super) enum Unread {
     ThereForPresence,
 }
 
+/// What an adapter's answers stand on, as its hook says: the sources themselves, or
+/// something derived from them, which the hook can write out of step with them.
+pub(super) enum Basis {
+    /// It reads the sources of its answers themselves (files of the side): nothing is
+    /// written, and nothing more is checked.
+    Sources,
+    /// It reads something derived from its sources: a tree where that is not of them.
+    Derived(Shifted),
+}
+
+/// A tree whose derived thing is not of its sources, the adapter over it, and the
+/// names asked there, of which none is there or absent: each cannot be told, as not of
+/// its sources.
+pub(super) struct Shifted {
+    /// The adapter over the tree.
+    pub(super) adapter: Adapter,
+    /// The names asked.
+    pub(super) names: Vec<ArtifactName>,
+}
+
 /// What an adapter's tests give the conformance test.
 pub(super) trait Hook {
     /// The space of the adapter.
@@ -344,6 +368,10 @@ pub(super) trait Hook {
     fn adapter_at(&self, dir: &Path) -> Adapter;
     /// Writes the tree into `dir`, which is empty, and says what it wrote.
     async fn tree(&self, dir: &Path) -> Tree;
+    /// What the adapter's answers stand on: for one that reads something derived from
+    /// its sources, a tree written into `dir` (empty) whose derived thing is not of
+    /// them; for one that reads its sources, nothing written.
+    async fn basis(&self, dir: &Path) -> Basis;
 }
 
 /// The comparisons every name is asked under.
@@ -981,6 +1009,29 @@ pub(super) async fn check(hook: &impl Hook) {
             }
         }
     }
+    // Of its sources: what it reads derived from them, out of step with them, tells no
+    // name there or absent.
+    let shifted = dir();
+    match hook.basis(shifted.path()).await {
+        Basis::Sources => {}
+        Basis::Derived(Shifted { adapter, names }) => {
+            assert!(
+                !names.is_empty(),
+                "{space}: a tree of a derived thing not of its sources asks no name"
+            );
+            let found = ask::resolve(&adapter, &names).await;
+            for name in &names {
+                assert!(
+                    every().iter().all(|c| matches!(
+                        found[name].state(c),
+                        ArtifactState::Unknown(Untold::NotOfSources(_))
+                    )),
+                    "{space}: {name}, read from what is not of its sources, cannot be told as not of them: {:?}",
+                    found[name]
+                );
+            }
+        }
+    }
     if hook.walks_nesting() {
         assert!(
             tree.too_deep.is_some(),
@@ -1054,7 +1105,7 @@ pub(super) async fn check(hook: &impl Hook) {
         );
     }
 
-    // The definition of the space, under the seven headings.
+    // The definition of the space, under the eight headings.
     for heading in headings() {
         assert!(
             hook.source().contains(&format!("\n//! # {heading}\n")),

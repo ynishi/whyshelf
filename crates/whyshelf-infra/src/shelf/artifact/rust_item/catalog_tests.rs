@@ -16,7 +16,7 @@ fn limits() -> CatalogLimits {
 }
 
 async fn lookup_at(target: &Path) -> Lookup {
-    Lookup::new(target, target.join("doc"), PAGE_BOUND).await
+    super::super::fixture::walk_lookup(target, target.join("doc"), PAGE_BOUND).await
 }
 
 fn path(text: &str) -> RustPath {
@@ -247,7 +247,8 @@ async fn docs_that_are_not_there_are_no_catalog_and_say_so() {
 #[tokio::test]
 async fn a_crate_with_a_page_too_large_is_counted_and_passed_over() {
     let target = docs().await;
-    let mut lookup = Lookup::new(target.path(), target.path().join("doc"), 100).await;
+    let mut lookup =
+        super::super::fixture::walk_lookup(target.path(), target.path().join("doc"), 100).await;
     let catalog = Catalog::walk(&mut lookup, &[], &limits()).await;
     // The index of each crate rustdoc wrote is past 100 bytes: none is read, and
     // each is counted.

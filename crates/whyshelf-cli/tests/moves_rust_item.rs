@@ -8,7 +8,8 @@
 //! name) and for the names in it; when no name ends as a gone one does, there
 //! is no candidate.
 //!
-//! The docs are a small tree of HTML laid out as rustdoc writes it, in a build
+//! The docs are a small tree of HTML laid out as rustdoc writes it, with the page of
+//! the source of the crate whose source is at the root of the project, in a build
 //! directory `CARGO_TARGET_DIR` names, so no crate is built and no program but the
 //! binary is run.
 
@@ -34,6 +35,9 @@ preset = "rustdoc"
 "#;
 
 const GENERATOR: &str = "<meta name=\"generator\" content=\"rustdoc\">";
+
+/// The source of the crate `demo` the docs are of: no character HTML escapes.
+const LIB: &str = "//! The demo crate.\n";
 
 /// A note whose link names these paths.
 fn note(items: &[&str]) -> String {
@@ -68,11 +72,27 @@ fn run(project: &Project, args: &[&str]) -> Output {
         .expect("the binary runs")
 }
 
+/// The crate `demo` the docs are of, at the root of the project, and its page of the
+/// source: the docs are of the sources as they are.
+fn sourced(project: &Project) {
+    fs::write(project.0.join("Cargo.toml"), "[package]\nname = \"demo\"\n").unwrap();
+    fs::create_dir_all(project.0.join("src")).unwrap();
+    fs::write(project.0.join("src/lib.rs"), LIB).unwrap();
+    let source = project.0.join("build/doc/src/demo/lib.rs.html");
+    fs::create_dir_all(source.parent().unwrap()).unwrap();
+    fs::write(
+        source,
+        format!("<html><head>{GENERATOR}</head><body><pre class=\"rust\"><code>{LIB}</code></pre></body></html>"),
+    )
+    .unwrap();
+}
+
 /// A project whose note names these items of the crate `demo`, all of them in its
 /// module `old` (`old/struct.Foo.html` for `demo::old::Foo`, `old/fn.bar.html` for
 /// `demo::old::bar`, `old/fn.keep.html` for `demo::old::keep`), approved.
 fn approved(name: &str, items: &[&str]) -> Project {
     let project = Project::with(name, BOOKS, &note(items));
+    sourced(&project);
     doc(&project, "demo/index.html");
     doc(&project, "demo/old/index.html");
     for item in items {
@@ -268,6 +288,7 @@ fn a_module_moved_under_another_parent_with_a_sibling_left_has_the_narrow_prefix
         BOOKS,
         &note(&["demo::app::x", "demo::app::x::Foo", "demo::app::keep"]),
     );
+    sourced(&project);
     for at in [
         "demo/index.html",
         "demo/app/index.html",

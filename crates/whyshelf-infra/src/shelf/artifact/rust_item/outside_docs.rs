@@ -58,6 +58,12 @@ impl OutsideDocs {
         }
     }
 
+    /// The docs as they are given, and with every symbolic link resolved when they can
+    /// be: where the build directory (their parent) is, in both forms.
+    pub(crate) fn docs(&self) -> (&Path, Option<&Path>) {
+        (&self.docs, self.real_docs.as_deref())
+    }
+
     /// What `p` is, every link followed, read as the project's tree reads a place
     /// through the system ([`read_path`]).
     async fn read_one(

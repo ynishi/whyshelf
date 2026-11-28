@@ -155,6 +155,21 @@ impl ProjectTree {
         }
     }
 
+    /// The place `at` of `side` (`at` with no part is the top) with every symbolic link
+    /// resolved, as a path of the file system, when the side is a directory of one and
+    /// the place can be resolved; none for a side of Git, whose places are no paths of
+    /// the file system. The one place a reader asks for the resolved form of a place
+    /// of the tree, beside the form [`beyond_path`](Self::beyond_path) writes.
+    pub(crate) async fn real_path(&self, side: Side, at: &Beyond<RelPath>) -> Option<PathBuf> {
+        match &self.0 {
+            Arm::Files(state) => {
+                let path = state.beyond_path(side, at).ok()?;
+                tokio::fs::canonicalize(path).await.ok()
+            }
+            Arm::Git(_) => None,
+        }
+    }
+
     /// The directory of the file system `side` is read from, when it is one.
     pub(crate) fn dir(&self, side: Side) -> Option<&Path> {
         match &self.0 {

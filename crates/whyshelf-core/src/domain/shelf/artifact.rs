@@ -48,6 +48,7 @@
 //! white space, no control character). The domain compares and shows them and never
 //! reads through them; reading content back is a port of the application.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
@@ -55,6 +56,7 @@ use thiserror::Error;
 
 use crate::domain::canon::Canon;
 use crate::domain::hash::{ContentHash, HashKind};
+use crate::domain::location::RelPath;
 use crate::domain::nonempty::NonBlank;
 
 /// The name of a space of names outside the documents, such as `file`.
@@ -509,22 +511,110 @@ pub enum Untold {
     /// The adapter said the text is not a name of its space, for this reason (the
     /// document that writes it is invalid).
     NotAName(NonBlank),
+    /// What the adapter reads is derived from the sources of its answers (a build of
+    /// them), and is not of them as they are: the promise "of its sources" of
+    /// [`SpaceAdapter`](crate::app::shelf::SpaceAdapter).
+    NotOfSources(NotOfSources),
 }
 
 impl Untold {
     /// The reason, as a person reads it.
-    pub fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> Cow<'_, str> {
         match self {
-            Self::Said(why) | Self::NotAName(why) => why.as_str(),
-            Self::NoAnswer => "the adapter gave no answer for it",
-            Self::NotAsked => "the adapter was not asked for this comparison",
+            Self::Said(why) | Self::NotAName(why) => Cow::Borrowed(why.as_str()),
+            Self::NoAnswer => Cow::Borrowed("the adapter gave no answer for it"),
+            Self::NotAsked => Cow::Borrowed("the adapter was not asked for this comparison"),
+            Self::NotOfSources(not) => Cow::Owned(not.to_string()),
         }
     }
 }
 
 impl fmt::Display for Untold {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
+        f.write_str(&self.as_str())
+    }
+}
+
+/// Why an adapter that reads something derived from its sources cannot tell from it:
+/// what it read (`read`, a phrase the adapter writes, such as "the built docs" and
+/// where they are), how that is not of the sources as they are ([`NotOfSourcesWhy`]),
+/// and what a person may do (`hint`, a sentence for a person; the domain does not
+/// hold it to be a command).
+///
+/// It is said as `{read} is not of the sources as they are: {why}; {hint}`, the one
+/// place it is worded. Its parts are kept apart from it (one allocation), so that an
+/// [`Untold`], which every answer that cannot be told carries, stays small.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct NotOfSources(Box<NotOfSourcesParts>);
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct NotOfSourcesParts {
+    read: NonBlank,
+    why: NotOfSourcesWhy,
+    hint: NonBlank,
+}
+
+impl NotOfSources {
+    /// What was read, how it is not of the sources, and what a person may do.
+    pub fn new(read: NonBlank, why: NotOfSourcesWhy, hint: NonBlank) -> Self {
+        Self(Box::new(NotOfSourcesParts { read, why, hint }))
+    }
+
+    /// What the adapter read, as it says it.
+    pub fn read(&self) -> &str {
+        self.0.read.as_str()
+    }
+
+    /// How what it read is not of the sources as they are.
+    pub fn why(&self) -> &NotOfSourcesWhy {
+        &self.0.why
+    }
+
+    /// What a person may do, as the adapter says it.
+    pub fn hint(&self) -> &str {
+        self.0.hint.as_str()
+    }
+}
+
+impl fmt::Display for NotOfSources {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} is not of the sources as they are: {}; {}",
+            self.0.read, self.0.why, self.0.hint
+        )
+    }
+}
+
+/// How what an adapter read is not of its sources as they are.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum NotOfSourcesWhy {
+    /// A file of the sources differs in content from the copy of it in what was read.
+    Differs {
+        /// The file of the sources.
+        file: RelPath,
+    },
+    /// What was read holds a copy of a file the sources do not have.
+    Gone {
+        /// The file, where the sources would have it.
+        file: RelPath,
+    },
+    /// What was read holds no copy of the sources, or one that cannot be laid beside
+    /// a file of them.
+    NoTrace,
+    /// What is read to hold it against the sources cannot be read, or is past a
+    /// bound, and why.
+    Unread(NonBlank),
+}
+
+impl fmt::Display for NotOfSourcesWhy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Differs { file } => write!(f, "{file} differs from the copy it holds"),
+            Self::Gone { file } => write!(f, "it holds a copy of {file}, which is not there"),
+            Self::NoTrace => f.write_str("it holds no copy of the sources to hold it against"),
+            Self::Unread(why) => write!(f, "it cannot be held against them: {why}"),
+        }
     }
 }
 
@@ -597,6 +687,7 @@ enum Answer {
     Present(Found),
     Absent,
     CannotTell(NonBlank),
+    NotOfSources(NotOfSources),
     NotAName(NonBlank),
 }
 
@@ -654,6 +745,12 @@ impl ArtifactReading {
         Self(Answer::CannotTell(why))
     }
 
+    /// The adapter cannot tell now, for what it reads is derived from the sources of
+    /// its answers and is not of them as they are ([`Untold::NotOfSources`]).
+    pub fn not_of_sources(why: NotOfSources) -> Self {
+        Self(Answer::NotOfSources(why))
+    }
+
     /// The text is not a name of the space, for this reason: the document that writes
     /// it is invalid.
     pub fn not_a_name(why: NonBlank) -> Self {
@@ -682,7 +779,10 @@ impl ArtifactReading {
     pub fn not_a_name_why(&self) -> Option<&NonBlank> {
         match &self.0 {
             Answer::NotAName(why) => Some(why),
-            Answer::Present(_) | Answer::Absent | Answer::CannotTell(_) => None,
+            Answer::Present(_)
+            | Answer::Absent
+            | Answer::CannotTell(_)
+            | Answer::NotOfSources(_) => None,
         }
     }
 
@@ -705,6 +805,7 @@ impl ArtifactReading {
             Answer::Absent => ArtifactState::Absent,
             Answer::NotAName(why) => ArtifactState::Unknown(Untold::NotAName(why.clone())),
             Answer::CannotTell(why) => ArtifactState::Unknown(Untold::Said(why.clone())),
+            Answer::NotOfSources(why) => ArtifactState::Unknown(Untold::NotOfSources(why.clone())),
         }
     }
 
@@ -713,7 +814,10 @@ impl ArtifactReading {
     pub fn address(&self) -> Option<&ContentAddress> {
         match &self.0 {
             Answer::Present(found) => found.address.as_ref(),
-            Answer::Absent | Answer::CannotTell(_) | Answer::NotAName(_) => None,
+            Answer::Absent
+            | Answer::CannotTell(_)
+            | Answer::NotOfSources(_)
+            | Answer::NotAName(_) => None,
         }
     }
 
@@ -1251,5 +1355,69 @@ mod tests {
             ArtifactState::Unknown(Untold::NotAName(why("climbs out")))
         );
         assert_eq!(ArtifactReading::absent().not_a_name_why(), None);
+    }
+
+    fn not_of_sources(how: NotOfSourcesWhy) -> NotOfSources {
+        NotOfSources::new(
+            why("the built docs at target/doc"),
+            how,
+            why("build the docs again"),
+        )
+    }
+
+    #[test]
+    fn what_is_not_of_its_sources_is_said_in_one_sentence_with_what_was_read_why_and_the_hint() {
+        let file: RelPath = "src/lib.rs".parse().unwrap();
+        let said = |how: NotOfSourcesWhy| not_of_sources(how).to_string();
+        assert_eq!(
+            said(NotOfSourcesWhy::Differs { file: file.clone() }),
+            "the built docs at target/doc is not of the sources as they are: src/lib.rs differs from the copy it holds; build the docs again"
+        );
+        assert_eq!(
+            said(NotOfSourcesWhy::Gone { file }),
+            "the built docs at target/doc is not of the sources as they are: it holds a copy of src/lib.rs, which is not there; build the docs again"
+        );
+        assert_eq!(
+            said(NotOfSourcesWhy::NoTrace),
+            "the built docs at target/doc is not of the sources as they are: it holds no copy of the sources to hold it against; build the docs again"
+        );
+        assert_eq!(
+            said(NotOfSourcesWhy::Unread(why("too many pages"))),
+            "the built docs at target/doc is not of the sources as they are: it cannot be held against them: too many pages; build the docs again"
+        );
+        let one = not_of_sources(NotOfSourcesWhy::NoTrace);
+        assert_eq!(one.read(), "the built docs at target/doc");
+        assert_eq!(one.why(), &NotOfSourcesWhy::NoTrace);
+        assert_eq!(one.hint(), "build the docs again");
+        assert_eq!(Untold::NotOfSources(one.clone()).as_str(), one.to_string());
+    }
+
+    #[test]
+    fn names_of_one_build_not_of_its_sources_are_one_reason() {
+        let file: RelPath = "src/a.rs".parse().unwrap();
+        let reasons: BTreeSet<Untold> = [
+            Untold::NotOfSources(not_of_sources(NotOfSourcesWhy::Differs {
+                file: file.clone(),
+            })),
+            Untold::NotOfSources(not_of_sources(NotOfSourcesWhy::Differs { file })),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(reasons.len(), 1);
+    }
+
+    #[test]
+    fn a_reading_not_of_its_sources_cannot_be_told_under_any_comparison() {
+        let not = not_of_sources(NotOfSourcesWhy::NoTrace);
+        let reading = ArtifactReading::not_of_sources(not.clone());
+        assert!(!reading.is_present());
+        assert_eq!(reading.not_a_name_why(), None);
+        assert_eq!(reading.address(), None);
+        for comparison in [Comparison::Presence, Comparison::Bytes] {
+            assert_eq!(
+                reading.state(&comparison),
+                ArtifactState::Unknown(Untold::NotOfSources(not.clone()))
+            );
+        }
     }
 }
