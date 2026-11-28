@@ -1,0 +1,42 @@
+{
+  "actor": "Yutaka Nishimura",
+  "artifacts": [
+    {
+      "hash": "sha256:a1496d48f124ad33ddc4c200d796438ad9114985cb829bd2db89c16fd1ce21f4",
+      "link": "cases",
+      "name": "crates/whyshelf-cli/tests/stale_origins.rs::stale_names_where_the_degradations_start",
+      "space": "rust-test",
+      "state": "present"
+    }
+  ],
+  "at": 1795840617582,
+  "expires": null,
+  "frame": [
+    {
+      "address": "d7c40ad01c95d7ceec9d18b17bffbdf4768d9e08",
+      "hash": "sha256:f63f02d0f6216cb29d9976ec7576dcd7734fa2e1b45ca4cc7580be2626848185",
+      "key": {
+        "book": "decision",
+        "form": {
+          "kind": "prefixed",
+          "prefix": "DEC",
+          "tail": {
+            "kind": "number",
+            "value": "41"
+          }
+        }
+      },
+      "link": "checks",
+      "target": "01a1c5ae-3719-7199-87eb-67281a108cef"
+    }
+  ],
+  "id": "01a22071-407c-76cf-b087-e38c0898d235",
+  "kind": "decision",
+  "reason": "The test of a lapsed approval gives the approval a window of six seconds and waits from the moment it read the clock (#220); what it checks is unchanged, and what these documents claim and the tests they name still hold, checked by the full test suite",
+  "revision": "33737c3579bc68cb4036a6e4e6c4de58fb743229",
+  "seen": "sha256:f0d024aee4843f41683dc9aff36557fefe56a55ba61c442c56d473bfa528e548",
+  "seen_address": "32c7dbfc294e8c32316b7f4aedcdfc51f5ea3717",
+  "subject": "01a1c765-24a9-7452-abc1-0e695ee0321d",
+  "v": 1,
+  "verb": "approve"
+}

@@ -8,7 +8,7 @@ mod common;
 use std::fs;
 use std::process::{Command, Output};
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use common::{
     NOTE, Project, in_seconds, json, linked_books, note, origins_of, stderr_lines, succeeded,
@@ -213,16 +213,20 @@ fn a_gone_file_is_looked_for_and_declared_moved_and_never_approved_again() {
 #[test]
 fn a_lapsed_approval_is_approved_again_with_a_new_expiry_and_not_by_stale() {
     let project = Project::new("next-lapsed");
+    // The approval lapses no sooner than 5 s from here (the seconds of now are
+    // whole). Only the approval has to run before that, so a loaded machine has the
+    // whole window for it.
+    let start = Instant::now();
     succeeded(&project.run(&[
         "judge",
         "approve",
         "N-1",
         "--until",
-        &in_seconds(3),
+        &in_seconds(6),
         "--reason",
         "for now",
     ]));
-    sleep(Duration::from_millis(3_500));
+    sleep(Duration::from_millis(7_000).saturating_sub(start.elapsed()));
     let next = next_of(&project);
     // `--stale` would approve with no expiry: it is not offered for a lapse.
     assert_eq!(
